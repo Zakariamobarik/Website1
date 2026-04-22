@@ -1,0 +1,49 @@
+<!-- SIDEBAR NAVIGATION -->
+<nav class="sidebar">
+    <!-- Logo et Titre -->
+    <div class="sidebar-header">
+        <div class="logo">
+            <i class="fas fa-industry"></i>
+        </div>
+        <h3>DCRM PRO</h3>
+    </div>
+
+    <!-- Profil Utilisateur -->
+    <div class="user-profile">
+        <!-- Avatar avec initiales de l'utilisateur -->
+        <div class="user-avatar">
+            <i class="fas fa-user-circle"></i>
+        </div>
+        <!-- Nom et rôle de l'utilisateur -->
+        <h6>{{ user.first_name|default:user.username }}</h6>
+        <p>Opérateur Production</p>
+    </div>
+
+    <!-- Menu Principal -->
+    <ul class="sidebar-menu">
+        <li>
+            <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <i class="fas fa-chart-line"></i>
+                <span>Dashboard</span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'pointage' %}" class="{% if request.resolver_match.url_name == 'pointage' %}active{% endif %}">
+                <i class="fas fa-barcode"></i>
+                <span>Pointage</span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>Accueil</span>
+            </a>
+        </li>
+    </ul>
+
+    <!-- Bouton Déconnexion -->
+    <a href="{% url 'logout' %}" class="logout-btn">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Déconnexion</span>
+    </a>
+</nav>
