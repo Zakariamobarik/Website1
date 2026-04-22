@@ -24,11 +24,14 @@ class GammeOperation(models.Model):
     nom           = models.CharField(max_length=200)
     temps_alloue  = models.DecimalField(max_digits=7, decimal_places=4, help_text="Durée en heures (ex: 1.005)")
     ordre         = models.PositiveSmallIntegerField(help_text="Position dans la gamme")
-    operateur     = models.ForeignKey(
-        'Operateur', null=True, blank=True,
-        on_delete=models.SET_NULL,
+    
+    # Un opérateur peut faire plusieurs gammes
+    # Une gamme peut être faite par plusieurs opérateurs
+    operateurs    = models.ManyToManyField(
+        'Operateur',
+        blank=True,
         related_name='gammes',
-        verbose_name="Opérateur assigné"
+        verbose_name="Opérateurs assignés"
     )
 
     class Meta:

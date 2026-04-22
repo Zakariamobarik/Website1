@@ -23,6 +23,9 @@
       <a href="{% url 'superviseur_dashboard' %}" class="btn btn-outline-secondary btn-sm">
         <i class="fas fa-arrow-left"></i> Superviseur
       </a>
+      <a href="{% url 'assigner_gammes' operateur.id %}" class="btn btn-warning">
+        ⚙️ Assigner des gammes
+      </a>
       <a href="{% url 'generer_planning' operateur_id=operateur.id %}"
          class="btn btn-primary btn-sm"
          onclick="return confirm('Régénérer le planning du jour ?')">

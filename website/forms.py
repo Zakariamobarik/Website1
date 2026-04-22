@@ -106,7 +106,7 @@ class GammeOperationForm(forms.ModelForm):
     """Formulaire pour ajouter/modifier une Gamme Opératoire"""
     class Meta:
         model = GammeOperation
-        fields = ['nom', 'temps_alloue', 'ordre', 'operateur']
+        fields = ['nom', 'temps_alloue', 'ordre', 'operateurs']
         widgets = {
             'nom': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -121,7 +121,7 @@ class GammeOperationForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': '1, 2, 3...'
             }),
-            'operateur': forms.Select(attrs={
+            'operateurs': forms.Select(attrs={
                 'class': 'form-control',
             }),
         }
@@ -202,5 +202,21 @@ class AleaForm(forms.ModelForm):
         }
 
 
-
+class AssignerGammesForm(forms.Form):
+    """
+    Formulaire simple pour assigner des gammes opératoires à un opérateur
+    Permet de cocher plusieurs gammes à la fois
+    """
+    # Récupère TOUTES les gammes, ordonnées par ordre
+    gammes = forms.ModelMultipleChoiceField(
+        queryset=GammeOperation.objects.all().order_by('ordre'),
+        widget=forms.CheckboxSelectMultiple,
+        label="Sélectionnez les gammes à assigner",
+        required=False
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Affiche le nom et l'ordre pour chaque gamme
+        self.fields['gammes'].label_from_instance = lambda obj: f"{obj.ordre}. {obj.nom} ({obj.temps_alloue}h)"
 

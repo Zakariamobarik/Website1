@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from datetime import datetime, date as date_type
+from datetime import datetime, date as date_type, timedelta, time
 from .forms import *
 from .models import *
 from .planning_utils import generer_planning_journalier, build_timeline_data
@@ -379,123 +379,70 @@ def declarer_alea(request, operation_id):
 
 
 
-# ============================================================
-# PLANNING JOURNALIER OPÉRATEUR
-# ============================================================
 
+# ===== NOUVELLE VUE: ASSIGNER LES GAMMES =====
 @login_required(login_url='home')
-def mon_dashboard_operateur(request):
+def assigner_gammes_operateur(request, operateur_id):
     """
-    Redirige l'utilisateur connecté vers son propre dashboard opérateur.
-    Si l'utilisateur n'est pas lié à un opérateur → tableau de bord superviseur.
+    Permet d'assigner des gammes opératoires à un opérateur
+    Et les ajoute AUTOMATIQUEMENT à son planning du jour
     """
-    try:
-        operateur = request.user.operateur_profil
-        return redirect('dashboard_operateur', operateur_id=operateur.id)
-    except (Operateur.DoesNotExist, AttributeError):
-        return redirect('superviseur_dashboard')
-
-
-@login_required(login_url='home')
-def dashboard_operateur(request, operateur_id):
-    """Dashboard timeline pour un opérateur donné (aujourd'hui)."""
-    operateur   = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
-
-    # Récupère ou génère le planning du jour
-    planning = PlanningJournalier.objects.filter(operateur=operateur, date=aujourd_hui).first()
-
-    # Si l'opérateur n'a pas de gammes assignées, on le signale
-    has_gammes = GammeOperation.objects.filter(operateur=operateur).exists()
-
-    timeline_data = build_timeline_data(planning) if planning else None
-
-    context = {
-        'operateur'    : operateur,
-        'planning'     : planning,
-        'timeline_data': timeline_data,
-        'aujourd_hui'  : aujourd_hui,
-        'has_gammes'   : has_gammes,
-    }
-    return render(request, 'planning/dashboard_operateur.html', context)
-
-
-@login_required(login_url='home')
-def generer_planning_view(request, operateur_id):
-    """Génère (ou régénère) le planning du jour pour un opérateur."""
-    operateur   = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
-
-    if not GammeOperation.objects.filter(operateur=operateur).exists():
-        messages.error(request, f"❌ Aucune gamme assignée à {operateur} — planning impossible.")
-        return redirect('dashboard_operateur', operateur_id=operateur_id)
-
-    generer_planning_journalier(operateur, aujourd_hui)
-    messages.success(request, f"✅ Planning du {aujourd_hui} généré pour {operateur}.")
-    return redirect('dashboard_operateur', operateur_id=operateur_id)
-
-
-@login_required(login_url='home')
-def demarrer_tache(request, tache_id):
-    """Marque le démarrage réel d'une tâche."""
-    tache = get_object_or_404(TachePlanifiee, id=tache_id)
-
-    if tache.heure_debut_reelle:
-        messages.warning(request, "Cette tâche a déjà été démarrée.")
+    # Récupère l'opérateur
+    operateur = get_object_or_404(Operateur, id=operateur_id)
+    
+    if request.method == 'POST':
+        # Récupère les gammes sélectionnées par le formulaire
+        form = AssignerGammesForm(request.POST)
+        if form.is_valid():
+            # Récupère les gammes cochées
+            gammes_selectionnees = form.cleaned_data['gammes']
+            
+            # Ajoute cet opérateur à chaque gamme sélectionnée
+            for gamme in gammes_selectionnees:
+                gamme.operateurs.add(operateur)
+            
+            # 🆕 AJOUTER AUTOMATIQUEMENT AU PLANNING DU JOUR
+            aujourd_hui = timezone.localdate()
+            
+            # Récupère ou crée le planning du jour pour cet opérateur
+            planning, created = PlanningJournalier.objects.get_or_create(
+                operateur=operateur,
+                date=aujourd_hui
+            )
+            
+            # Récupère les tâches déjà existantes pour ce planning
+            derniere_tache = planning.taches.all().order_by('ordre').last()
+            prochain_ordre = (derniere_tache.ordre + 1) if derniere_tache else 1
+            
+            # Pour chaque gamme assignée, crée une tâche dans le planning
+            for gamme in gammes_selectionnees:
+                # Calcule les horaires
+                heure_debut = timezone.make_aware(
+                    datetime.combine(aujourd_hui, time(6, 0))  # 6h du matin
+                ) + timedelta(hours=prochain_ordre)
+                
+                heure_fin = heure_debut + timedelta(hours=float(gamme.temps_alloue))
+                
+                # Crée la tâche
+                TachePlanifiee.objects.create(
+                    planning=planning,
+                    type_tache='operation',
+                    gamme_operation=gamme,
+                    ordre=prochain_ordre,
+                    heure_debut_prevue=heure_debut,
+                    heure_fin_prevue=heure_fin
+                )
+                
+                prochain_ordre += 1
+            
+            messages.success(request, f"✅ Gammes assignées et ajoutées au planning de {operateur}!")
+            return redirect('dashboard_operateur', operateur_id=operateur_id)
     else:
-        tache.heure_debut_reelle = timezone.now()
-        tache.save(update_fields=['heure_debut_reelle'])
-        messages.success(request, f"▶️ Tâche démarrée : {tache.nom_affichage}")
-
-    return redirect('dashboard_operateur', operateur_id=tache.planning.operateur_id)
-
-
-@login_required(login_url='home')
-def terminer_tache(request, tache_id):
-    """Marque la fin réelle d'une tâche."""
-    tache = get_object_or_404(TachePlanifiee, id=tache_id)
-
-    if not tache.heure_debut_reelle:
-        messages.error(request, "Vous devez d'abord démarrer cette tâche.")
-    elif tache.heure_fin_reelle:
-        messages.warning(request, "Cette tâche est déjà terminée.")
-    else:
-        tache.heure_fin_reelle = timezone.now()
-        tache.save(update_fields=['heure_fin_reelle'])
-        ecart = tache.ecart_fin_minutes
-        if ecart and ecart > 0:
-            messages.warning(request, f"✅ Tâche terminée avec {ecart} min de retard.")
-        elif ecart and ecart < 0:
-            messages.success(request, f"✅ Tâche terminée avec {abs(ecart)} min d'avance !")
-        else:
-            messages.success(request, f"✅ Tâche terminée dans les temps.")
-
-    return redirect('dashboard_operateur', operateur_id=tache.planning.operateur_id)
-
-
-@login_required(login_url='home')
-def superviseur_dashboard(request):
-    """Vue superviseur : état des 3 opérateurs en temps réel."""
-    aujourd_hui = timezone.localdate()
-    operateurs  = Operateur.objects.all().order_by('nom')
-
-    data = []
-    for op in operateurs:
-        planning = PlanningJournalier.objects.filter(operateur=op, date=aujourd_hui).first()
-        if planning:
-            td = build_timeline_data(planning)
-        else:
-            td = None
-        data.append({
-            'operateur'     : op,
-            'planning'      : planning,
-            'timeline_data' : td,
-            'has_gammes'    : GammeOperation.objects.filter(operateur=op).exists(),
-        })
-
+        form = AssignerGammesForm()
+    
     context = {
-        'aujourd_hui': aujourd_hui,
-        'operateurs_data': data,
+        'form': form,
+        'operateur': operateur,
     }
-    return render(request, 'planning/superviseur.html', context)
+    return render(request, 'planning/assigner_gammes.html', context)
 
