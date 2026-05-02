@@ -54,7 +54,16 @@ urlpatterns = [
 
 # ==================== next  =======================================
 
-
+# ===== PLANNING =======================================================================================================
+    path('superviseur/',views.superviseur_dashboard,name='superviseur_dashboard'),
+    path('planning/operateur/<int:operateur_id>/',views.dashboard_operateur,name='dashboard_operateur'),
+    path('planning/operateur/<int:operateur_id>/generer/',views.generer_planning,name='generer_planning'),
+    path('planning/tache/<int:tache_id>/demarrer/',views.demarrer_tache,name='demarrer_tache'),
+    path('planning/tache/<int:tache_id>/terminer/',views.terminer_tache,name='terminer_tache'),
+    path('planning/tache/<int:tache_id>/deplacer/<str:direction>/',views.deplacer_tache,name='deplacer_tache'),
+    path('planning/operateur/<int:operateur_id>/assigner-gammes/',views.assigner_gammes_operateur,name='assigner_gammes'),
+    path('planning/operateur/<int:operateur_id>/rafraichir/',views.rafraichir_operateur,name='rafraichir_operateur'),
+    path('planning/operateur/<int:operateur_id>/modifier-heure/',views.modifier_heure_debut,name='modifier_heure_debut'),
 
 
 

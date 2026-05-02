@@ -81,6 +81,22 @@
                             <small class="text-muted">Optionnel - Département ou fonction</small>
                         </div>
 
+                        <!-- Champ Shift -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-clock"></i> 📅 Type de Shift
+                            </label>
+                            {% if form.shift.errors %}
+                                {{ form.shift }}
+                                <div class="invalid-feedback">
+                                    {{ form.shift.errors.0 }}
+                                </div>
+                            {% else %}
+                                {{ form.shift }}
+                            {% endif %}
+                            <small class="text-muted">Sélectionnez les heures de travail de l'opérateur</small>
+                    </div>
+
                         <!-- Champ Compte utilisateur -->
                         <div class="mb-3">
                             <label class="form-label">

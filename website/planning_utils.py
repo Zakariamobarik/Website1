@@ -1,256 +1,165 @@
 """
-Utilitaires pour la génération et le suivi du planning journalier des opérateurs.
+Utilitaires pour la génération du planning journalier.
 
-Shift : 06h00 – 14h00
-Pauses fixes :
-  • SQA       : 09h00 – 09h30  (30 min)
-  • Déjeuner  : 11h00 – 11h30  (30 min)
+Chaque opérateur a son propre shift :
+  - matin      : 06h → 14h
+  - normal     : 08h → 17h
+  - apres_midi : 14h → 22h
 
-Algorithme de génération :
-  - Les opérations sont enchaînées à partir de 06h00.
-  - Si une opération recouvre l'heure d'une pause, la durée de la pause
-    est ajoutée à l'heure de fin de cette opération (le bloc "opération"
-    intègre la coupure ; la pause est visible dans la visualisation).
-  - Si une pause survient entre deux opérations, elle est insérée
-    en tant que tâche distincte.
+Les gammes s'enchaînent sans vide à partir du début du shift.
+L'opérateur peut les réordonner (champ 'ordre' de TachePlanifiee).
 """
 
-from datetime import datetime, timedelta, time as dt_time
-
+from datetime import datetime, timedelta
 from django.utils import timezone
-
 from .models import GammeOperation, PlanningJournalier, TachePlanifiee
 
-# ─── Constantes shift ────────────────────────────────────────────────────────
-SHIFT_START   = dt_time(6,  0)
-PAUSE_SQA_START  = dt_time(9,  0)
-PAUSE_SQA_END    = dt_time(9, 30)
-PAUSE_DEJ_START  = dt_time(11, 0)
-PAUSE_DEJ_END    = dt_time(11, 30)
 
-
-def _make_aware(date, h, m, s=0):
-    """Crée un datetime timezone-aware pour la date et l'heure données."""
-    return timezone.make_aware(datetime(date.year, date.month, date.day, h, m, s))
+def _make_aware(date, heure, minute):
+    """
+    Crée un datetime timezone-aware pour une date + heure donnée.
+    Exemple : _make_aware(today, 6, 0) → 2026-04-22 06:00:00+01:00
+    """
+    return timezone.make_aware(datetime(date.year, date.month, date.day, heure, minute))
 
 
 def generer_planning_journalier(operateur, date_travail):
     """
-    Génère (ou régénère) le planning journalier d'un opérateur.
+    Génère (ou régénère) le planning d'un opérateur pour une journée.
 
-    - Supprime le planning existant pour ce couple (operateur, date).
-    - Enchaîne les opérations assignées à l'opérateur (gammes triées par ordre).
-    - Insère automatiquement les pauses aux bons endroits.
+    Principe :
+      1. Supprime l'ancien planning du jour s'il existe
+      2. Récupère les gammes assignées à cet opérateur, triées par 'ordre'
+      3. Les enchaîne en respectant leur durée exacte (en minutes)
+      4. Démarre à: heure_debut_shift + 30 minutes
+      5. Crée une TachePlanifiee pour chaque gamme
 
-    Retourne l'instance PlanningJournalier créée.
+    Retourne : l'instance PlanningJournalier créée
     """
-    sqa_start = _make_aware(date_travail, 9,  0)
-    sqa_end   = _make_aware(date_travail, 9, 30)
-    dej_start = _make_aware(date_travail, 11, 0)
-    dej_end   = _make_aware(date_travail, 11, 30)
-
-    # Supprime l'ancien planning pour cette journée
+    # Supprime l'ancien planning pour éviter les doublons
     PlanningJournalier.objects.filter(operateur=operateur, date=date_travail).delete()
 
+    # Crée le nouveau planning vide
     planning = PlanningJournalier.objects.create(operateur=operateur, date=date_travail)
 
-    gammes = list(GammeOperation.objects.filter(operateur=operateur).order_by('ordre'))
+    # Récupère les gammes assignées à cet opérateur, triées par ordre
+    gammes = list(
+        GammeOperation.objects.filter(operateurs=operateur).order_by('ordre')
+    )
 
-    current  = _make_aware(date_travail, 6, 0)
-    sqa_done = False
-    dej_done = False
-    ordre    = 1
-    taches   = []   # liste de dicts à créer en bulk
+    # ✅ CORRECTION: Récupère l'heure de début du shift de l'opérateur
+    h_debut, m_debut = operateur.shift_debut_hm
+    
+    # ✅ CORRECTION: Démarre à heure_debut_shift + 30 minutes
+    heure_courante = _make_aware(date_travail, h_debut, m_debut) + timedelta(minutes=30)
 
-    def enqueue_break(type_tache, b_start, b_end):
-        nonlocal ordre
-        taches.append(dict(
-            planning=planning,
-            type_tache=type_tache,
-            gamme_operation=None,
-            ordre=ordre,
-            heure_debut_prevue=b_start,
-            heure_fin_prevue=b_end,
-        ))
-        ordre += 1
+    # On crée les tâches en les enchaînant sans vide
+    for index, gamme in enumerate(gammes):
+        # ✅ Durée de cette gamme (en heures décimaux → minutes)
+        # Exemple: temps_alloue = 1.005 heures = 1 heure + 0.3 minutes = 60.3 minutes
+        temps_minutes = float(gamme.temps_alloue) * 60
+        duree = timedelta(minutes=temps_minutes)
 
-    for gamme in gammes:
-        duree    = timedelta(hours=float(gamme.temps_alloue))
-        task_end = current + duree
+        # Heure de fin = heure de début + durée (respecte la durée réelle)
+        heure_fin = heure_courante + duree
 
-        # ── Pause SQA ──────────────────────────────────────────────────────────
-        if not sqa_done:
-            if current >= sqa_start:
-                # Heure actuelle déjà passée SQA : insérer la pause et décaler
-                enqueue_break('pause_sqa', sqa_start, sqa_end)
-                sqa_done = True
-                if current < sqa_end:
-                    current  = sqa_end
-                task_end = current + duree
-
-            elif current < sqa_start <= task_end:
-                # La tâche chevauche la pause SQA : prolonger l'heure de fin
-                task_end += (sqa_end - sqa_start)
-                sqa_done = True
-
-        # ── Pause Déjeuner ────────────────────────────────────────────────────
-        if not dej_done:
-            if current >= dej_start:
-                enqueue_break('pause_dejeuner', dej_start, dej_end)
-                dej_done = True
-                if current < dej_end:
-                    current  = dej_end
-                task_end = current + duree
-
-            elif current < dej_start <= task_end:
-                task_end += (dej_end - dej_start)
-                dej_done = True
-
-        # ── Créer la tâche opération ──────────────────────────────────────────
-        taches.append(dict(
+        # Crée la tâche planifiée
+        TachePlanifiee.objects.create(
             planning=planning,
             type_tache='operation',
             gamme_operation=gamme,
-            ordre=ordre,
-            heure_debut_prevue=current,
-            heure_fin_prevue=task_end,
-        ))
-        ordre   += 1
-        current  = task_end
+            ordre=index + 1,             # ordre commence à 1
+            heure_debut_prevue=heure_courante,
+            heure_fin_prevue=heure_fin,
+        )
 
-    # Pauses restantes non encore insérées (toutes les opérations terminent avant 09h ou 11h)
-    if not sqa_done:
-        enqueue_break('pause_sqa', sqa_start, sqa_end)
-    if not dej_done:
-        enqueue_break('pause_dejeuner', dej_start, dej_end)
-
-    for t in taches:
-        TachePlanifiee.objects.create(**t)
+        # ✅ La prochaine tâche commence où finit celle-ci (pas de vide entre les tâches)
+        heure_courante = heure_fin
 
     return planning
-
-
-def get_tache_attendue(planning, moment=None):
-    """
-    Retourne un dict décrivant la tâche attendue à l'instant `moment`.
-
-    Structure du résultat :
-        {
-          'type'    : 'operation' | 'pause_sqa' | 'pause_dejeuner' | 'avant_shift' | 'apres_shift',
-          'nom'     : str,
-          'tache'   : TachePlanifiee | None,
-        }
-    """
-    if moment is None:
-        moment = timezone.now()
-
-    date      = planning.date
-    sqa_start = _make_aware(date, 9,  0)
-    sqa_end   = _make_aware(date, 9, 30)
-    dej_start = _make_aware(date, 11, 0)
-    dej_end   = _make_aware(date, 11, 30)
-    shift_start = _make_aware(date, 6,  0)
-    shift_end   = _make_aware(date, 14, 0)
-
-    if moment < shift_start:
-        return {'type': 'avant_shift', 'nom': 'Avant le shift', 'tache': None}
-
-    if sqa_start <= moment < sqa_end:
-        return {'type': 'pause_sqa', 'nom': 'Pause SQA', 'tache': None}
-
-    if dej_start <= moment < dej_end:
-        return {'type': 'pause_dejeuner', 'nom': 'Pause Déjeuner', 'tache': None}
-
-    for tache in planning.taches.filter(type_tache='operation').order_by('ordre'):
-        if tache.heure_debut_prevue <= moment < tache.heure_fin_prevue:
-            return {'type': 'operation', 'nom': tache.nom_affichage, 'tache': tache}
-
-    if moment >= shift_end:
-        return {'type': 'apres_shift', 'nom': 'Fin de shift', 'tache': None}
-
-    return {'type': 'inconnu', 'nom': '—', 'tache': None}
 
 
 def build_timeline_data(planning):
     """
     Prépare les données de la timeline pour le template.
 
+    La timeline va du DÉBUT au FIN du shift de l'opérateur.
+    Chaque tâche est positionnée en % sur cet axe.
+
     Retourne un dict avec :
-    - taches_display : liste de dicts enrichis (position/largeur en %)
-    - pauses_display : liste des 2 pauses fixes (idem)
-    - now_pct        : position de l'instant présent en %
-    - shift_start_min, shift_end_min : bornes absolues en minutes depuis minuit
-    - maintenant     : datetime courant
-    - tache_attendue : résultat de get_tache_attendue()
+      - taches_display  : liste de tâches enrichies (position left%, largeur width%)
+      - now_pct         : position actuelle en % sur la timeline
+      - shift_start_min : début du shift en minutes depuis minuit
+      - shift_duree_min : durée totale du shift en minutes
+      - maintenant      : datetime courant
+      - tache_attendue  : la tâche qui devrait être en cours maintenant
     """
-    SHIFT_START_MIN = 6  * 60   # 360 min depuis minuit
-    SHIFT_END_MIN   = 14 * 60   # 840 min depuis minuit
-    SHIFT_TOTAL     = SHIFT_END_MIN - SHIFT_START_MIN  # 480 min
+    operateur      = planning.operateur
+    shift_start    = operateur.shift_debut_minutes      # ex: 360 pour 06h
+    shift_duree    = operateur.shift_duree_minutes      # ex: 480 pour 8h de shift
+    maintenant     = timezone.now()
 
     def to_pct(dt):
-        minutes = dt.hour * 60 + dt.minute + dt.second / 60
-        return max(0, min(100, (minutes - SHIFT_START_MIN) / SHIFT_TOTAL * 100))
+        """Convertit un datetime en pourcentage sur la timeline du shift"""
+        # Calcule le nombre de minutes depuis minuit AUJOURD'HUI
+        minutes_depuis_minuit = dt.hour * 60 + dt.minute + (dt.second / 60)
+        # Calcule le pourcentage: (position - début du shift) / durée du shift * 100
+        pct = (minutes_depuis_minuit - shift_start) / shift_duree * 100
+        # Retourne le % clamé entre 0 et 100 (ne dépasse pas la timeline)
+        return max(0, min(100, round(pct, 2)))
 
-    def duration_pct(start_dt, end_dt):
-        seconds = (end_dt - start_dt).total_seconds()
-        return max(0.5, seconds / 60 / SHIFT_TOTAL * 100)
+    def duree_pct(debut_dt, fin_dt):
+        """Convertit une durée (fin-debut) en pourcentage de la timeline"""
+        secondes = (fin_dt - debut_dt).total_seconds()
+        pct = (secondes / 60) / shift_duree * 100
+        return max(0.5, round(pct, 2))  # minimum 0.5% pour rester visible
 
-    maintenant  = timezone.now()
-    now_pct     = to_pct(maintenant)
-    date        = planning.date
+    # Position de la ligne "maintenant" sur la timeline
+    now_pct = to_pct(maintenant)
 
-    pauses_display = [
-        {
-            'type'      : 'pause_sqa',
-            'nom'       : 'Pause SQA',
-            'heure'     : '09:00–09:30',
-            'left_pct'  : to_pct(_make_aware(date, 9,  0)),
-            'width_pct' : 30 / SHIFT_TOTAL * 100,
-        },
-        {
-            'type'      : 'pause_dejeuner',
-            'nom'       : 'Pause Déjeuner',
-            'heure'     : '11:00–11:30',
-            'left_pct'  : to_pct(_make_aware(date, 11, 0)),
-            'width_pct' : 30 / SHIFT_TOTAL * 100,
-        },
-    ]
-
+    # Construction des données enrichies pour chaque tâche
     taches_display = []
+    tache_attendue = None
+
     for tache in planning.taches.filter(type_tache='operation').order_by('ordre'):
         left_pct  = to_pct(tache.heure_debut_prevue)
-        width_pct = duration_pct(tache.heure_debut_prevue, tache.heure_fin_prevue)
+        width_pct = duree_pct(tache.heure_debut_prevue, tache.heure_fin_prevue)
         ecart     = tache.ecart_fin_minutes
+
         taches_display.append({
-            'tache'           : tache,
-            'nom'             : tache.nom_affichage,
-            'statut'          : tache.statut,
-            'couleur'         : tache.couleur_statut,
-            'left_pct'        : round(left_pct, 2),
-            'width_pct'       : round(width_pct, 2),
-            'debut_prevu_str' : tache.heure_debut_prevue.strftime('%H:%M'),
-            'fin_prevue_str'  : tache.heure_fin_prevue.strftime('%H:%M'),
-            'ecart_minutes'   : ecart,
-            'ecart_label'     : (f'+{ecart} min' if ecart and ecart > 0
-                                 else f'{ecart} min' if ecart is not None
-                                 else None),
+            'tache'     : tache,
+            'nom'       : tache.nom_affichage,
+            'statut'    : tache.statut,
+            'couleur'   : tache.couleur_statut,
+            'left_pct'  : left_pct,
+            'width_pct' : width_pct,
+            'debut_str' : tache.heure_debut_prevue.strftime('%H:%M'),
+            'fin_str'   : tache.heure_fin_prevue.strftime('%H:%M'),
+            'ecart'     : ecart,
+            'ecart_label': (f'+{ecart} min' if ecart and ecart > 0
+                            else f'{ecart} min' if ecart is not None else None),
         })
 
-    tache_attendue = get_tache_attendue(planning, maintenant)
+        # Détecte la tâche en cours (la ligne "maintenant" est dessus)
+        if tache.heure_debut_prevue <= maintenant < tache.heure_fin_prevue:
+            tache_attendue = {'type': 'operation', 'nom': tache.nom_affichage, 'tache': tache}
 
-    # Axe horaire (6h à 14h, soit 9 marques)
-    timeline_hours = [
-        {'h': h, 'pct': round((h * 60 - SHIFT_START_MIN) / SHIFT_TOTAL * 100, 2)}
-        for h in range(6, 15)
-    ]
+    # Axe horaire : marques toutes les heures sur la timeline
+    # On génère les heures entre début et fin du shift
+    h_debut, m_debut = operateur.shift_debut_hm
+    h_fin,   m_fin   = operateur.shift_fin_hm
+    timeline_hours = []
+    for h in range(h_debut, h_fin + 1):
+        pct = ((h * 60 - shift_start) / shift_duree) * 100
+        if 0 <= pct <= 100:
+            timeline_hours.append({'h': h, 'pct': round(pct, 2)})
 
     return {
-        'taches_display'   : taches_display,
-        'pauses_display'   : pauses_display,
-        'now_pct'          : round(now_pct, 2),
-        'maintenant'       : maintenant,
-        'tache_attendue'   : tache_attendue,
-        'shift_start_min'  : SHIFT_START_MIN,
-        'shift_end_min'    : SHIFT_END_MIN,
-        'timeline_hours'   : timeline_hours,
+        'taches_display'  : taches_display,
+        'now_pct'         : now_pct,
+        'maintenant'      : maintenant,
+        'tache_attendue'  : tache_attendue,
+        'shift_start_min' : shift_start,
+        'shift_duree_min' : shift_duree,
+        'timeline_hours'  : timeline_hours,
     }

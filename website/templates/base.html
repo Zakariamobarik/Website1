@@ -233,7 +233,7 @@
                 </a>
             </li>
             <li>
-                <a href="#">
+                <a href="{% url 'superviseur_dashboard' %}">
                     <i class="fas fa-users-cog"></i>
                     <span>Superviseur Planning</span>
                 </a>
@@ -254,12 +254,20 @@
                     <span>Opérateurs</span>
                 </a>
             </li>
+            {% if user.operateur_profil %}
             <li>
-                <a href="#">
+                <a href="{% url 'dashboard_operateur' operateur_id=user.operateur_profil.id %}">
                     <i class="fas fa-calendar-day"></i>
                     <span>Mon Planning</span>
                 </a>
             </li>
+            <li>
+                <a href="{% url 'assigner_gammes' operateur_id=user.operateur_profil.id %}">
+                    <i class="fas fa-tasks"></i>
+                    <span>Assigner mes gammes</span>
+                </a>
+            </li>
+            {% endif %}
             <li>
                 <a href="{% url 'of_list' %}">
                     <i class="fas fa-cube"></i>

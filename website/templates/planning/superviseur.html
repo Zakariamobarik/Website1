@@ -4,255 +4,297 @@
 {% block title %}Superviseur — Vue globale{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-3">
+<div class="container-fluid mt-3 px-4">
 
-  {# ─── En-tête ─────────────────────────────────────────────── #}
-  <div class="row align-items-center mb-4">
-    <div class="col">
-      <h2 class="mb-0">
-        <i class="fas fa-users-cog text-primary"></i>
-        Vue Superviseur
+  <!-- ══ EN-TÊTE ══════════════════════════════════════════════ -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h2 class="mb-0 fw-bold">
+        <i class="fas fa-users-cog text-primary"></i> Vue Superviseur
       </h2>
-      <p class="text-muted mb-0">{{ aujourd_hui|date:"l j F Y" }} — Shift 06:00–14:00</p>
+      <p class="text-muted mb-0">{{ aujourd_hui|date:"l j F Y" }}</p>
     </div>
-    <div class="col-auto">
-      <span class="badge bg-secondary fs-6">
-        <i class="fas fa-clock"></i> <span id="clock-sup">--:--:--</span>
-      </span>
-    </div>
+    <!-- Horloge temps réel -->
+    <span class="badge bg-dark fs-6 px-3 py-2">
+      <i class="fas fa-clock"></i> <span id="clock-sup">--:--:--</span>
+    </span>
   </div>
 
-  {# ─── Grille des opérateurs ─────────────────────────────────── #}
+  <!-- ══ GRILLE DES OPÉRATEURS ════════════════════════════════ -->
   <div class="row g-4">
-    {% for item in operateurs_data %}
-    <div class="col-xl-4 col-md-6">
-      <div class="card border-0 shadow-sm h-100">
 
-        {# Titre opérateur #}
-        <div class="card-header d-flex justify-content-between align-items-center
-                    {% if item.planning %}
-                      {% with r=item.planning.retard_global_minutes %}
-                        {% if r > 5 %}bg-danger text-white
-                        {% elif r < -5 %}bg-success text-white
-                        {% else %}bg-primary text-white{% endif %}
-                      {% endwith %}
-                    {% else %}bg-secondary text-white{% endif %}">
-          <div>
-            <h5 class="mb-0">
-              <i class="fas fa-hard-hat"></i>
-              {{ item.operateur.prenom }} {{ item.operateur.nom }}
-            </h5>
-            <small>{{ item.operateur.code_badge }}{% if item.operateur.poste %} — {{ item.operateur.poste }}{% endif %}</small>
+    {% for item in operateurs_data %}
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+
+        <!-- Titre : avatar + nom + shift -->
+        <div class="card-header bg-white border-bottom d-flex align-items-center gap-3 py-3">
+
+          <!-- Avatar coloré selon le shift -->
+          <div class="op-avatar op-avatar--{{ item.operateur.shift }}">
+            {{ item.operateur.prenom|first|upper }}{{ item.operateur.nom|first|upper }}
           </div>
-          <a href="{% url 'dashboard_operateur' operateur_id=item.operateur.id %}"
-             class="btn btn-sm btn-light">
-            <i class="fas fa-expand-alt"></i>
-          </a>
+
+          <!-- Infos opérateur -->
+          <div class="flex-grow-1">
+            <h5 class="mb-0 fw-bold">
+              {{ item.operateur.prenom }} {{ item.operateur.nom }}
+              {% if item.operateur.poste %}
+                <small class="text-muted fw-normal">— {{ item.operateur.poste }}</small>
+              {% endif %}
+            </h5>
+            <!-- Badge shift -->
+            <span class="badge shift-badge--{{ item.operateur.shift }} mt-1">
+              {% if item.operateur.shift == 'matin' %}
+                🌅 Matin 06h→14h
+              {% elif item.operateur.shift == 'normal' %}
+                ☀️ Normal 08h→17h
+              {% else %}
+                🌙 Après-midi 14h→22h
+              {% endif %}
+            </span>
+          </div>
+
+          <!-- Boutons actions -->
+          <div class="d-flex gap-2">
+            {% if item.has_gammes %}
+              {% if not item.planning %}
+                <a href="{% url 'generer_planning' operateur_id=item.operateur.id %}"
+                   class="btn btn-sm btn-primary">
+                  <i class="fas fa-magic"></i> Générer planning
+                </a>
+              {% else %}
+                <a href="{% url 'generer_planning' operateur_id=item.operateur.id %}"
+                   class="btn btn-sm btn-outline-secondary"
+                   onclick="return confirm('Régénérer ?')">
+                  <i class="fas fa-sync-alt"></i>
+                </a>
+              {% endif %}
+            {% endif %}
+            <a href="{% url 'dashboard_operateur' operateur_id=item.operateur.id %}"
+               class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-expand-alt"></i> Détail
+            </a>
+          </div>
         </div>
 
-        <div class="card-body">
+        <!-- Corps : timeline ou message -->
+        <div class="card-body py-3">
+
           {% if not item.has_gammes %}
-          <div class="alert alert-warning py-2 mb-2 small">
-            <i class="fas fa-exclamation-triangle"></i> Aucune gamme assignée
-          </div>
-          {% endif %}
+            <!-- Pas de gammes assignées -->
+            <div class="text-center text-muted py-2">
+              <i class="fas fa-exclamation-triangle text-warning"></i>
+              Aucune gamme assignée.
+              <a href="{% url 'assigner_gammes' operateur_id=item.operateur.id %}">Assigner →</a>
+            </div>
 
-          {% if not item.planning %}
-          <div class="text-center text-muted py-3">
-            <i class="fas fa-calendar-times fa-2x opacity-50 mb-2"></i>
-            <p class="mb-2">Aucun planning généré</p>
-            {% if item.has_gammes %}
-            <a href="{% url 'generer_planning' operateur_id=item.operateur.id %}"
-               class="btn btn-sm btn-primary">
-              <i class="fas fa-magic"></i> Générer
-            </a>
-            {% endif %}
-          </div>
+          {% elif not item.planning %}
+            <!-- Planning pas encore généré -->
+            <div class="text-center text-muted py-2">
+              <i class="fas fa-calendar-times"></i>
+              Aucun planning généré pour aujourd'hui.
+            </div>
+
           {% else %}
+            <!-- ══ TIMELINE ══════════════════════════════════ -->
 
-          {# KPI rapides #}
-          <div class="row g-2 mb-3 text-center">
-            <div class="col-4">
-              <div class="border rounded p-2">
-                <div class="fw-bold text-primary fs-5">{{ item.planning.avancement }}%</div>
-                <div class="text-muted" style="font-size:11px">Avancement</div>
-              </div>
+            <!-- Axe horaire au-dessus de la barre -->
+            <div class="tl-axis mb-1" style="position:relative; height:18px;">
+              {% for label in item.timeline_data.timeline_hours %}
+              <span style="position:absolute; left:{{ label.pct }}%; font-size:11px;
+                           color:#888; transform:translateX(-50%);">
+                {{ label.h }}h
+              </span>
+              {% endfor %}
             </div>
-            <div class="col-4">
+
+            <!-- Barre de timeline -->
+            <div class="tl-bar">
+
+              <!-- Blocs de tâches -->
+              {% for td in item.timeline_data.taches_display %}
+              <div class="tl-bloc tl-{{ td.couleur }}"
+                   style="left:{{ td.left_pct }}%; width:{{ td.width_pct }}%;"
+                   data-bs-toggle="tooltip"
+                   title="{{ td.nom }} | {{ td.debut_str }}–{{ td.fin_str }}{% if td.ecart_label %} | {{ td.ecart_label }}{% endif %}">
+                <span class="tl-label">{{ td.nom|truncatechars:16 }}</span>
+              </div>
+              {% endfor %}
+
+              <!-- Ligne "maintenant" — se déplace en JS -->
+              <div class="tl-now sup-now-{{ item.operateur.id }}"
+                   style="left:{{ item.timeline_data.now_pct }}%;">
+                <span class="tl-now-label">{{ item.timeline_data.maintenant|date:"H:i" }}</span>
+              </div>
+
+            </div>
+
+            <!-- KPI rapides sous la timeline -->
+            <div class="d-flex gap-3 mt-2 small">
+              <!-- Avancement -->
+              <span class="text-muted">
+                Avancement :
+                <strong class="text-primary">{{ item.planning.avancement }}%</strong>
+              </span>
+              <!-- Écart global -->
               {% with r=item.planning.retard_global_minutes %}
-              <div class="border rounded p-2">
-                <div class="fw-bold fs-5 {% if r > 0 %}text-danger{% elif r < 0 %}text-success{% else %}text-success{% endif %}">
-                  {% if r > 0 %}+{% endif %}{{ r }} min
-                </div>
-                <div class="text-muted" style="font-size:11px">Écart</div>
-              </div>
+                {% if r > 0 %}
+                  <span class="text-danger"><i class="fas fa-arrow-up"></i> +{{ r }} min retard</span>
+                {% elif r < 0 %}
+                  <span class="text-success"><i class="fas fa-arrow-down"></i> {{ r }} min avance</span>
+                {% else %}
+                  <span class="text-success"><i class="fas fa-check"></i> Dans les temps</span>
+                {% endif %}
               {% endwith %}
-            </div>
-            <div class="col-4">
+              <!-- Tâche attendue -->
               {% with ta=item.timeline_data.tache_attendue %}
-              <div class="border rounded p-2">
-                {% if ta.type == 'operation' %}
-                  <div class="fw-bold text-primary" style="font-size:11px">⚙️ Opération</div>
-                {% elif ta.type == 'pause_sqa' %}
-                  <div class="fw-bold text-warning" style="font-size:11px">☕ SQA</div>
-                {% elif ta.type == 'pause_dejeuner' %}
-                  <div class="fw-bold text-warning" style="font-size:11px">🍽️ Déjeuner</div>
-                {% elif ta.type == 'apres_shift' %}
-                  <div class="fw-bold text-success" style="font-size:11px">✅ Terminé</div>
-                {% else %}
-                  <div class="fw-bold text-secondary" style="font-size:11px">—</div>
+                {% if ta %}
+                  <span class="text-muted">En cours : <strong>{{ ta.nom }}</strong></span>
                 {% endif %}
-                <div class="text-muted" style="font-size:11px">Maintenant</div>
-              </div>
               {% endwith %}
             </div>
-          </div>
 
-          {# Mini-timeline #}
-          <div class="mini-timeline-bar mb-2">
-            {% for td in item.timeline_data.taches_display %}
-            <div class="mini-tl-block mini-tl-{{ td.couleur }}"
-                 style="left:{{ td.left_pct }}%;width:{{ td.width_pct }}%"
-                 title="{{ td.nom }} {{ td.debut_prevu_str }}–{{ td.fin_prevue_str }}">
-            </div>
-            {% endfor %}
-            {% for pause in item.timeline_data.pauses_display %}
-            <div class="mini-tl-block mini-tl-pause"
-                 style="left:{{ pause.left_pct }}%;width:{{ pause.width_pct }}%"
-                 title="{{ pause.nom }}">
-            </div>
-            {% endfor %}
-            <div class="mini-tl-now sup-now-{{ item.operateur.id }}"
-                 style="left:{{ item.timeline_data.now_pct }}%">
-            </div>
-          </div>
-          <div class="d-flex justify-content-between" style="font-size:10px;color:#999">
-            <span>06:00</span><span>09:00</span><span>11:00</span><span>14:00</span>
-          </div>
-
-          {# Liste des tâches #}
-          <div class="mt-3">
-            {% for tache in item.planning.taches_ordonnees %}
-            <div class="d-flex justify-content-between align-items-center py-1 border-bottom small
-                        {% if tache.statut == 'en_cours' %}fw-bold{% endif %}">
-              <span>
-                {% if tache.est_pause %}
-                  {% if tache.type_tache == 'pause_sqa' %}☕{% else %}🍽️{% endif %}
-                {% else %}⚙️{% endif %}
-                {{ tache.nom_affichage|truncatechars:28 }}
-              </span>
-              <span>
-                {% if tache.statut == 'termine' %}
-                  <span class="badge bg-success">✓</span>
-                {% elif tache.statut == 'en_cours' %}
-                  <span class="badge bg-primary">▶</span>
-                {% elif tache.statut == 'en_retard_demarrage' %}
-                  <span class="badge bg-danger">!</span>
-                {% elif tache.est_pause %}
-                  <span class="badge bg-warning text-dark">☕</span>
-                {% else %}
-                  <span class="badge bg-secondary">○</span>
-                {% endif %}
-                {% if tache.ecart_fin_minutes is not None %}
-                  {% if tache.ecart_fin_minutes > 0 %}
-                    <span class="text-danger">+{{ tache.ecart_fin_minutes }}m</span>
-                  {% elif tache.ecart_fin_minutes < 0 %}
-                    <span class="text-success">{{ tache.ecart_fin_minutes }}m</span>
-                  {% endif %}
-                {% endif %}
-              </span>
-            </div>
-            {% endfor %}
-          </div>
-
-          {# Boutons #}
-          <div class="d-flex gap-2 mt-3">
-            <a href="{% url 'dashboard_operateur' operateur_id=item.operateur.id %}"
-               class="btn btn-sm btn-primary flex-grow-1">
-              <i class="fas fa-eye"></i> Détail
-            </a>
-            <a href="{% url 'generer_planning' operateur_id=item.operateur.id %}"
-               class="btn btn-sm btn-outline-secondary"
-               onclick="return confirm('Régénérer le planning ?')">
-              <i class="fas fa-sync-alt"></i>
-            </a>
-          </div>
-
-          {% endif %}{# end if planning #}
+          {% endif %}
         </div>
       </div>
     </div>
     {% empty %}
-    <div class="col-12">
-      <div class="alert alert-info">
-        Aucun opérateur enregistré.
-        <a href="{% url 'ajouter_operateur' %}">Ajouter un opérateur →</a>
+      <div class="col-12">
+        <div class="alert alert-info">
+          Aucun opérateur.
+          <a href="{% url 'ajouter_operateur' %}">Ajouter →</a>
+        </div>
       </div>
-    </div>
     {% endfor %}
-  </div>
 
+  </div>
 </div>
 
+<!-- ══ STYLES ═══════════════════════════════════════════════════ -->
 <style>
-  .mini-timeline-bar {
-    position: relative;
-    height: 24px;
-    background: #e9ecef;
-    border-radius: 4px;
-    overflow: visible;
+  /* Avatar opérateur */
+  .op-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: #fff;
+    flex-shrink: 0;
   }
-  .mini-tl-block {
-    position: absolute;
-    top: 2px;
-    height: 20px;
-    border-radius: 3px;
+  .op-avatar--matin      { background: linear-gradient(135deg, #f39c12, #e67e22); }
+  .op-avatar--normal     { background: linear-gradient(135deg, #3498db, #2980b9); }
+  .op-avatar--apres_midi { background: linear-gradient(135deg, #9b59b6, #8e44ad); }
+
+  /* Badge shift */
+  .shift-badge--matin      { background:#fff3cd; color:#856404; border-radius:20px; padding:3px 10px; font-size:12px; }
+  .shift-badge--normal     { background:#cfe2ff; color:#084298; border-radius:20px; padding:3px 10px; font-size:12px; }
+  .shift-badge--apres_midi { background:#e2d9f3; color:#432874; border-radius:20px; padding:3px 10px; font-size:12px; }
+
+  /* Barre de timeline */
+  .tl-bar {
+    position: relative; height: 52px;
+    background: #e9ecef; border-radius: 8px; overflow: visible;
   }
-  .mini-tl-primary  { background: #0d6efd; }
-  .mini-tl-success  { background: #198754; }
-  .mini-tl-secondary{ background: #6c757d; }
-  .mini-tl-danger   { background: #dc3545; }
-  .mini-tl-pause {
-    background: repeating-linear-gradient(
-      45deg, #ffc107, #ffc107 4px, #fff3cd 4px, #fff3cd 8px
-    );
-    border: 1px dashed #d39e00;
-    z-index: 5;
+
+  /* Bloc d'une tâche */
+  .tl-bloc {
+    position: absolute; top: 4px; height: 44px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; cursor: default;
+    border: 1px solid rgba(0,0,0,.1);
+    transition: opacity .2s;
   }
-  .mini-tl-now {
-    position: absolute;
-    top: -3px;
-    bottom: -3px;
-    width: 2px;
-    background: #dc3545;
-    z-index: 20;
-    border-radius: 1px;
+  .tl-bloc:hover { opacity: .8; z-index: 10; }
+
+  /* Couleurs des blocs selon statut */
+  .tl-primary   { background: #0d6efd; }
+  .tl-success   { background: #198754; }
+  .tl-secondary { background: #6c757d; }
+  .tl-danger    { background: #dc3545; }
+  .tl-warning   { background: #ffc107; }
+
+  /* Texte dans un bloc */
+  .tl-label {
+    font-size: 11px; font-weight: 600; color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+    padding: 0 6px; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  }
+
+  /* Ligne "maintenant" (trait rouge vertical) */
+  .tl-now {
+    position: absolute; top: -8px; bottom: -8px;
+    width: 3px; background: #dc3545;
+    border-radius: 2px; z-index: 20;
+  }
+  .tl-now-label {
+    position: absolute; top: -22px; left: 50%;
+    transform: translateX(-50%);
+    background: #dc3545; color: #fff;
+    font-size: 10px; font-weight: 700;
+    padding: 1px 5px; border-radius: 4px; white-space: nowrap;
   }
 </style>
 
+<!-- ══ JAVASCRIPT ════════════════════════════════════════════════ -->
 <script>
-  function pad(n) { return String(n).padStart(2, '0'); }
-  const SHIFT_START_MIN = 360;
-  const SHIFT_TOTAL = 480;
+  // Active les tooltips Bootstrap sur les blocs de tâches
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el, { placement: 'top' });
+  });
 
-  function nowPct() {
+  // Données des shifts pour chaque opérateur
+  // On stocke shift_start_min et shift_duree_min pour calculer les positions
+  const shiftsData = {
+    {% for item in operateurs_data %}
+    {% if item.timeline_data %}
+    {{ item.operateur.id }}: {
+      startMin : {{ item.timeline_data.shift_start_min }},
+      dureeMin : {{ item.timeline_data.shift_duree_min }},
+    },
+    {% endif %}
+    {% endfor %}
+  };
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  // Calcule le pourcentage pour un opérateur donné selon l'heure actuelle
+  function nowPctForOp(startMin, dureeMin) {
     const d = new Date();
     const min = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-    return Math.max(0, Math.min(100, (min - SHIFT_START_MIN) / SHIFT_TOTAL * 100));
+    return Math.max(0, Math.min(100, (min - startMin) / dureeMin * 100));
   }
 
-  function tickSup() {
-    const d = new Date();
-    const s = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-    const el = document.getElementById('clock-sup');
-    if (el) el.textContent = s;
+  function tick() {
+    // 🆕 Utilise GMT+0 (heure universelle) au lieu de l'heure locale
+    const d   = new Date();
+    const utcHours = d.getUTCHours();
+    const utcMinutes = d.getUTCMinutes();
+    const utcSeconds = d.getUTCSeconds();
+    const str = `${pad(utcHours)}:${pad(utcMinutes)}:${pad(utcSeconds)}`;
 
-    const pct = nowPct();
-    document.querySelectorAll('[class*="mini-tl-now"]').forEach(el => {
-      el.style.left = pct + '%';
-    });
+    // Met à jour l'horloge en haut à droite
+    const clockEl = document.getElementById('clock-sup');
+    if (clockEl) clockEl.textContent = str;
+
+    // Met à jour la ligne "maintenant" pour chaque opérateur
+    for (const [opId, data] of Object.entries(shiftsData)) {
+      const pct     = nowPctForOp(data.startMin, data.dureeMin);
+      const lineEl  = document.querySelector(`.sup-now-${opId}`);
+      const labelEl = lineEl ? lineEl.querySelector('.tl-now-label') : null;
+      if (lineEl) lineEl.style.left = pct + '%';
+      if (labelEl) labelEl.textContent = `${pad(utcHours)}:${pad(utcMinutes)}`;
+    }
   }
-  setInterval(tickSup, 1000);
-  tickSup();
+
+  // Mise à jour chaque seconde pour l'horloge + ligne maintenant
+  setInterval(tick, 1000);
+  tick();
+
+  // Rafraîchissement de la PAGE toutes les 30 secondes
+  // (recharge les données depuis le serveur)
+  setTimeout(() => location.reload(), 30000);
 </script>
+
 {% endblock %}

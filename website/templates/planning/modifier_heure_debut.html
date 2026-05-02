@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Modifier l'heure de début — {{ operateur }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-md-6 mx-auto">
+      
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">⏰ Modifier l'heure de début</h5>
+          <small>Opérateur: {{ operateur.prenom }} {{ operateur.nom }}</small>
+        </div>
+        
+        <div class="card-body p-4">
+          
+          <form method="POST">
+            {% csrf_token %}
+            
+            <!-- SÉLECTEUR D'HEURE -->
+            <div class="mb-4">
+              <label class="form-label fw-bold">Heure de début du premier opération</label>
+              <input 
+                type="time" 
+                name="heure_debut" 
+                class="form-control form-control-lg"
+                value="{{ heure_str }}"
+                required
+              >
+              <small class="text-muted d-block mt-2">
+                💡 Toutes les tâches se mettront à jour automatiquement
+              </small>
+            </div>
+
+            <!-- APERÇU -->
+            <div class="alert alert-info">
+              <h6 class="mb-2">📋 Aperçu des tâches:</h6>
+              <small>
+                {% for tache in planning.taches_ordonnees %}
+                  <div>
+                    <strong>{{ tache.ordre }}.</strong> {{ tache.nom_affichage }}
+                    <span class="text-muted">({{ tache.duree_prevue_minutes }} min)</span>
+                  </div>
+                {% endfor %}
+              </small>
+            </div>
+
+            <!-- BOUTONS -->
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-success btn-lg flex-grow-1">
+                <i class="fas fa-check"></i> Confirmer
+              </button>
+              <a href="{% url 'dashboard_operateur' operateur_id=operateur.id %}" class="btn btn-secondary btn-lg">
+                <i class="fas fa-times"></i> Annuler
+              </a>
+            </div>
+          </form>
+
+        </div>
+      </div>
+
+      <!-- AIDE -->
+      <div class="card border-0 shadow-sm mt-3 bg-light">
+        <div class="card-body">
+          <h6 class="mb-2">❓ Comment ça fonctionne?</h6>
+          <p class="small text-muted mb-0">
+            ✅ L'heure que tu mets ici sera l'heure de <strong>début de la première tâche</strong><br>
+            ✅ Les tâches suivantes s'ajusteront automatiquement<br>
+            ✅ Chaque tâche durera exactement le temps prévu
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{% endblock %}

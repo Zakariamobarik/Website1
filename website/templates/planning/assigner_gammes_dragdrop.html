@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assigner les gammes — {{ operateur }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <div class="row">
+    <div class="col-lg-10 mx-auto">
+      
+      <!-- TITRE -->
+      <div class="mb-4">
+        <h2>📋 Assigner les gammes opératoires</h2>
+        <p class="text-muted">Opérateur: <strong>{{ operateur.prenom }} {{ operateur.nom }}</strong></p>
+      </div>
+
+      <!-- INTERFACE DRAG & DROP -->
+      <div class="row g-4">
+        
+        <!-- ══ COLONNE 1: GAMMES DISPONIBLES ══ -->
+        <div class="col-lg-5">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-info text-white">
+              <h5 class="mb-0">📦 Gammes disponibles</h5>
+              <small>Glissez vers la droite pour assigner</small>
+            </div>
+            <div class="card-body">
+              <!-- Zone de gammes disponibles -->
+              <div id="gammes-disponibles" class="gammes-list">
+                {% for gamme in gammes_disponibles %}
+                  <div class="gamme-item" draggable="true" data-gamme-id="{{ gamme.id }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <strong>{{ gamme.ordre }}. {{ gamme.nom }}</strong><br>
+                        <small class="text-muted">Durée: {{ gamme.temps_alloue }}h</small>
+                      </div>
+                      <i class="fas fa-grip-vertical text-muted"></i>
+                    </div>
+                  </div>
+                {% empty %}
+                  <p class="text-muted text-center">✅ Toutes les gammes sont assignées!</p>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ COLONNE 2: GAMMES ASSIGNÉES ══ -->
+        <div class="col-lg-7">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+              <h5 class="mb-0">✅ Gammes assignées à {{ operateur.prenom }}</h5>
+              <small>Réordonnez par glissement</small>
+            </div>
+            <div class="card-body">
+              <!-- Zone de dépôt pour les gammes assignées -->
+              <div id="gammes-assignees" class="gammes-list gammes-assignees">
+                {% for gamme in gammes_assignees %}
+                  <div class="gamme-item gamme-assignee" draggable="true" data-gamme-id="{{ gamme.id }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <strong>{{ gamme.ordre }}. {{ gamme.nom }}</strong><br>
+                        <small class="text-muted">Durée: {{ gamme.temps_alloue }}h</small>
+                      </div>
+                      <i class="fas fa-grip-vertical text-muted"></i>
+                    </div>
+                  </div>
+                {% empty %}
+                  <div class="text-center text-muted py-5">
+                    <i class="fas fa-arrow-left fa-2x mb-3"></i><br>
+                    Glissez les gammes ici
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOUTONS D'ACTION -->
+      <div class="d-flex gap-2 mt-4">
+        <form method="POST" id="form-assigner" class="flex-grow-1">
+          {% csrf_token %}
+          <!-- Champ caché pour envoyer l'ordre des gammes -->
+          <input type="hidden" id="gammes-ordre" name="gammes_ordre" value="[]">
+          
+          <button type="submit" class="btn btn-success btn-lg w-100">
+            <i class="fas fa-check"></i> Confirmer l'assignation
+          </button>
+        </form>
+        <a href="{% url 'dashboard_operateur' operateur_id=operateur.id %}" class="btn btn-secondary btn-lg">
+          <i class="fas fa-times"></i> Annuler
+        </a>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ STYLES ══════════════════════════════════════════════════ -->
+<style>
+  /* Conteneur des gammes */
+  .gammes-list {
+    min-height: 300px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 12px;
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+  }
+
+  .gammes-list.drag-over {
+    background: #e7f3ff;
+    border-color: #0d6efd;
+  }
+
+  /* Chaque gamme */
+  .gamme-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: move;
+    transition: all 0.2s ease;
+  }
+
+  .gamme-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: #0d6efd;
+  }
+
+  /* Gamme assignée (vert) */
+  .gamme-assignee {
+    background: #f0f9ff;
+    border-color: #198754;
+  }
+
+  .gamme-assignee:hover {
+    background: #e8f5e9;
+    border-color: #155724;
+  }
+
+  /* En cours de glissement */
+  .gamme-item.dragging {
+    opacity: 0.5;
+    background: #e9ecef;
+  }
+</style>
+
+<!-- ══ JAVASCRIPT - Drag & Drop ════════════════════════════════ -->
+<script>
+  // Éléments du DOM
+  const gammesDispo = document.getElementById('gammes-disponibles');
+  const gammesAssignees = document.getElementById('gammes-assignees');
+  const formAssigner = document.getElementById('form-assigner');
+  const champOrdre = document.getElementById('gammes-ordre');
+
+  // Variable pour stocker l'élément en cours de glissement
+  let draggedElement = null;
+
+  // ══ FONCTION: Mettre à jour l'ordre caché ══
+  function mettreAJourOrdre() {
+    // Récupère tous les IDs des gammes assignées dans l'ordre
+    const gammesOrdre = Array.from(gammesAssignees.querySelectorAll('.gamme-item'))
+      .map(el => el.dataset.gammeId);
+    
+    // Mets à jour le champ caché
+    champOrdre.value = JSON.stringify(gammesOrdre);
+    console.log('Ordre mis à jour:', gammesOrdre);
+  }
+
+  // ══ EVENT: Drag Start ══
+  document.addEventListener('dragstart', (e) => {
+    if (e.target.classList.contains('gamme-item')) {
+      draggedElement = e.target;
+      e.target.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  });
+
+  // ══ EVENT: Drag End ══
+  document.addEventListener('dragend', (e) => {
+    if (e.target.classList.contains('gamme-item')) {
+      e.target.classList.remove('dragging');
+      draggedElement = null;
+      
+      // Retire la classe drag-over de tous les conteneurs
+      document.querySelectorAll('.gammes-list').forEach(el => {
+        el.classList.remove('drag-over');
+      });
+    }
+  });
+
+  // ══ EVENT: Drag Over ══
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    // Ajoute l'effet visuel au conteneur survolé
+    if (e.target.classList.contains('gammes-list')) {
+      e.target.classList.add('drag-over');
+    }
+  });
+
+  // ══ EVENT: Drag Leave ══
+  document.addEventListener('dragleave', (e) => {
+    if (e.target.classList.contains('gammes-list')) {
+      e.target.classList.remove('drag-over');
+    }
+  });
+
+  // ══ EVENT: Drop ══
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    
+    if (!draggedElement) return;
+
+    // Récupère le conteneur sur lequel on a déposé
+    const dropZone = e.target.closest('.gammes-list');
+    if (!dropZone) return;
+
+    dropZone.classList.remove('drag-over');
+
+    // Déplace l'élément vers la zone de dépôt
+    dropZone.appendChild(draggedElement);
+
+    // Met à jour l'ordre dans le formulaire
+    mettreAJourOrdre();
+
+    draggedElement = null;
+  });
+
+  // ══ EVENT: Soumettre le formulaire ══
+  formAssigner.addEventListener('submit', (e) => {
+    // Mets à jour l'ordre avant de soumettre
+    mettreAJourOrdre();
+  });
+
+  // Initialisation au chargement
+  mettreAJourOrdre();
+</script>
+
+{% endblock %}

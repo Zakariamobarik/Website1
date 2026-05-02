@@ -5,10 +5,33 @@ from datetime import timedelta, datetime, time
 
 # ─── Opérateur ───────────────────────────────────────────────
 class Operateur(models.Model):
-    nom        = models.CharField(max_length=100)
-    prenom     = models.CharField(max_length=100)
-    poste      = models.CharField(max_length=100, blank=True)
-    user       = models.OneToOneField(
+    """
+    Représente un opérateur de production.
+    Chaque opérateur a un shift qui définit ses heures de travail.
+    """
+
+    # ── Les 3 types de shifts disponibles ────────────────────────
+    # Format: ('valeur_en_bd', 'texte_affiché_à_lutilisateur')
+    SHIFT_CHOICES = [
+        ('matin',      'Matin      (06h → 14h)'),
+        ('normal',     'Normal     (08h → 17h)'),
+        ('apres_midi', 'Après-midi (14h → 22h)'),
+    ]
+
+    nom    = models.CharField(max_length=100)
+    prenom = models.CharField(max_length=100)
+    poste  = models.CharField(max_length=100, blank=True)
+
+    # ── NOUVEAU champ: le shift de l'opérateur ──────────────────
+    # blank=False → obligatoire, on doit toujours choisir un shift
+    shift  = models.CharField(
+        max_length=20,
+        choices=SHIFT_CHOICES,
+        default='normal',
+        verbose_name="Type de shift"
+    )
+
+    user   = models.OneToOneField(
         User, null=True, blank=True,
         on_delete=models.SET_NULL,
         related_name='operateur_profil',
@@ -17,7 +40,63 @@ class Operateur(models.Model):
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"
-
+    
+    # ✅ PROPRIÉTÉ 1: Heure et minute de début du shift
+    @property
+    def shift_debut_hm(self):
+        """
+        Retourne (heure, minute) de début du shift
+        Exemple: shift='matin' → (6, 0) pour 06h00
+        """
+        # Dictionnaire avec les horaires de chaque shift
+        shift_times = {
+            'matin':      (6, 0),        # 06h00 le matin
+            'normal':     (8, 0),        # 08h00 (shift normal)
+            'apres_midi': (14, 0),       # 14h00 (après-midi)
+        }
+        return shift_times.get(self.shift, (8, 0))
+    
+    # ✅ PROPRIÉTÉ 2: Heure et minute de fin du shift
+    @property
+    def shift_fin_hm(self):
+        """
+        Retourne (heure, minute) de fin du shift
+        Exemple: shift='matin' → (14, 0) pour 14h00
+        """
+        # Dictionnaire avec l'heure de fin de chaque shift
+        shift_times = {
+            'matin':      (14, 0),       # Finit à 14h00
+            'normal':     (17, 0),       # Finit à 17h00
+            'apres_midi': (22, 0),       # Finit à 22h00
+        }
+        return shift_times.get(self.shift, (17, 0))
+    
+    # ✅ PROPRIÉTÉ 3: Minutes depuis minuit du début du shift
+    @property
+    def shift_debut_minutes(self):
+        """
+        Retourne le nombre de minutes depuis minuit pour le début du shift
+        Exemple: (6, 0) → 360 minutes (6 heures * 60 minutes)
+        """
+        h, m = self.shift_debut_hm
+        return h * 60 + m
+    
+    # ✅ PROPRIÉTÉ 4: Durée totale du shift en minutes
+    @property
+    def shift_duree_minutes(self):
+        """
+        Retourne la durée totale du shift en minutes
+        Exemple: 'matin' (6h à 14h) → 480 minutes (8 heures)
+        """
+        h_debut, m_debut = self.shift_debut_hm
+        h_fin, m_fin = self.shift_fin_hm
+        
+        # Convertir en minutes depuis minuit
+        debut_minutes = h_debut * 60 + m_debut
+        fin_minutes = h_fin * 60 + m_fin
+        
+        # Retourner la différence (durée totale)
+        return fin_minutes - debut_minutes
 
 # ─── Gamme opératoire ─────────────────────────────────────────
 class GammeOperation(models.Model):
