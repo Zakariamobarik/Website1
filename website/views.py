@@ -99,15 +99,9 @@ def gamme_form(request, id=None):
 def supprimer_gamme(request, id):
     """Supprime une gamme opératoire"""
     gamme = get_object_or_404(GammeOperation, id=id)
-    
-    if request.method == 'POST':
-        gamme.delete()
-        messages.success(request, "✅ Gamme supprimée!")
-        return redirect('gammes_list')
-    
-    return render(request, 'gamme/gamme_confirm_delete.html', {'gamme': gamme})
-
-
+    gamme.delete()
+    messages.success(request, "✅ Gamme supprimée!")
+    return redirect('gammes_list')
 
 
 
@@ -137,7 +131,7 @@ def operateur_form(request, id=None):
     - Si id est None → Ajouter
     - Si id existe → Modifier
     """
-    operateur = get_object_or_404(Operateur, id=id) if id else None
+    operateur = get_object_or_404(Operateur, pk=id) if id else None
     titre = "Modifier l'Opérateur" if operateur else "Ajouter un Opérateur"
     
     if request.method == 'POST':
@@ -156,15 +150,11 @@ def operateur_form(request, id=None):
 @login_required(login_url='home')
 def supprimer_operateur(request, id):
     """Supprime un opérateur"""
-    operateur = get_object_or_404(Operateur, id=id)
+    operateur = get_object_or_404(Operateur, pk=id)
+    operateur.delete()
+    messages.success(request, "✅ Opérateur supprimé!")
+    return redirect('operateur_list')
     
-    if request.method == 'POST':
-        operateur.delete()
-        messages.success(request, "✅ Opérateur supprimé!")
-        return redirect('operateur/operateur_list')
-    
-    return render(request, 'operateur/operateur_delete.html', {'operateur': operateur})
-
 #--------------------Ordre de fabrication ----------------------------------------------------------------------------
 
 @login_required(login_url='home')
@@ -328,9 +318,6 @@ def list_retard(request):
     return render(request, 'statistiques_retard/list_retard.html', context)
 
 
-
-
-
 @login_required(login_url='home')
 def dashboard(request):
     """
@@ -350,37 +337,10 @@ def dashboard(request):
 
 
 
+# ===== VUE: ASSIGNER LES GAMMES AVEC DRAG & DROP ================================================================================
 
 
 
-@login_required(login_url='home')
-def declarer_alea(request, operation_id):
-    """
-    Vue pour déclarer un aléa (problème) pendant une opération
-    """
-    operation = get_object_or_404(OperationOF, id=operation_id)
-    
-    if request.method == 'POST':
-        form = AleaForm(request.POST)
-        if form.is_valid():
-            alea = form.save(commit=False)
-            alea.operation = operation
-            alea.save()
-            messages.success(request, f"⚠️ Aléa enregistré : {alea.get_type_alea_display()}")
-            return redirect('detail_of', numero_of=operation.of.numero)
-    else:
-        form = AleaForm()
-    
-    context = {
-        'form': form,
-        'operation': operation,
-    }
-    return render(request, 'of/declarer_alea.html', context)
-
-
-
-
-# ===== VUE: ASSIGNER LES GAMMES AVEC DRAG & DROP =====
 @login_required(login_url='home')
 def assigner_gammes_operateur(request, operateur_id):
     """
@@ -740,3 +700,38 @@ def deplacer_tache(request, tache_id, direction):
     
     messages.success(request, f"✅ Tâches réordonnées")
     return redirect('dashboard_operateur', operateur_id=operateur.id)
+
+
+
+
+
+
+
+
+
+
+@login_required(login_url='home')
+def declarer_alea(request, operation_id):
+    """
+    Vue pour déclarer un aléa (problème) pendant une opération
+    """
+    operation = get_object_or_404(OperationOF, id=operation_id)
+    
+    if request.method == 'POST':
+        form = AleaForm(request.POST)
+        if form.is_valid():
+            alea = form.save(commit=False)
+            alea.operation = operation
+            alea.save()
+            messages.success(request, f"⚠️ Aléa enregistré : {alea.get_type_alea_display()}")
+            return redirect('detail_of', numero_of=operation.of.numero)
+    else:
+        form = AleaForm()
+    
+    context = {
+        'form': form,
+        'operation': operation,
+    }
+    return render(request, 'of/declarer_alea.html', context)
+
+
