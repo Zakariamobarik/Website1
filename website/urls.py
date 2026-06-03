@@ -54,11 +54,13 @@ urlpatterns = [
 
 # ==================== next  =======================================
 
-# ===== PLANNING =======================================================================================================
+# ===== =================================PLANNING =======================================================================================================
     path('superviseur/',views.superviseur_dashboard,name='superviseur_dashboard'),
+    path('mon-poste/', views.operateur_vue_simple, name='operateur_vue_simple'),
+    path('declarer-retard/<int:tache_id>/', views.declarer_retard, name='declarer_retard'), # NOUVELLE ROUTE
+
     path('planning/operateur/<int:operateur_id>/',views.dashboard_operateur,name='dashboard_operateur'),
     path('planning/operateur/<int:operateur_id>/generer/',views.generer_planning,name='generer_planning'),
-    path('planning/tache/<int:tache_id>/demarrer/',views.demarrer_tache,name='demarrer_tache'),
     path('planning/tache/<int:tache_id>/terminer/',views.terminer_tache,name='terminer_tache'),
     path('planning/tache/<int:tache_id>/deplacer/<str:direction>/',views.deplacer_tache,name='deplacer_tache'),
     path('planning/operateur/<int:operateur_id>/assigner-gammes/',views.assigner_gammes_operateur,name='assigner_gammes'),
@@ -66,6 +68,9 @@ urlpatterns = [
     path('planning/operateur/<int:operateur_id>/modifier-heure/',views.modifier_heure_debut,name='modifier_heure_debut'),
 
 
+# ===== =================================DASHBOARD =======================================================================================================
+
+    path('directeur/', views.dashboard_directeur, name='dashboard_directeur'),
 
 
 
@@ -102,7 +107,6 @@ urlpatterns = [
     path('of/', views.of_list, name='of_list'),
     path('of/<str:numero_of>/', views.of_detail, name='detail_of'),
     path('gammes/', views.gammes_list, name='gammes_list'),
-    path('alea/<int:operation_id>/', views.declarer_alea, name='declarer_alea'),
 ]
 
 """

@@ -177,24 +177,31 @@ class EntreeOperationForm(forms.ModelForm):
 
 
 # ===== FORMULAIRE DE DÉCLARATION D'ALÉA =====
-class AleaForm(forms.ModelForm):
-    """
-    Quand un opérateur rencontre un problème pendant son opération
-    """
+class RetardForm(forms.ModelForm):
+    # Définit explicitement le champ cause avec les attributs Bootstrap
+    cause = forms.ModelChoiceField(
+        queryset=CauseRetard.objects.all(),
+        widget=forms.Select(attrs={
+            'class': 'form-select',
+            'required': 'required',
+        }),
+        label='Cause du retard',
+        empty_label='-- Sélectionnez une cause --'
+    )
+    
     class Meta:
-        model = Alea
-        fields = ['type_alea', 'description', 'duree']
+        model = Retard
+        fields = ['cause', 'description']
         widgets = {
-            'type_alea': forms.Select(attrs={'class': 'form-control'}),
             'description': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 3,
-                'placeholder': 'Décrivez le problème...'
+                'placeholder': 'Décrivez le problème rencontré (optionnel)'
             }),
-            'duree': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Durée en minutes'
-            })
+        }
+        labels = {
+            'cause': 'Cause du retard',
+            'description': 'Description',
         }
 
 

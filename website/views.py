@@ -285,7 +285,7 @@ def terminer_operation(request, operation_id):
             f"(Sortie: {operation.date_sortie.strftime('%H:%M')})"
         )
     else:
-        remaining = operation.date_sortie - timezone.now()
+        remaining = operation.date_sortie - (timezone.now()+timedelta(hours=1))
         remaining_minutes = round(remaining.total_seconds() / 60)
         messages.info(
             request,
@@ -405,7 +405,7 @@ def modifier_heure_debut(request, operateur_id):
     Cela met à jour toutes les tâches du jour automatiquement.
     """
     operateur = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
+    aujourd_hui = timezone.localdate() + timedelta(hours=1)
     
     # Récupère le planning du jour
     planning = PlanningJournalier.objects.filter(
@@ -426,7 +426,7 @@ def modifier_heure_debut(request, operateur_id):
             # Crée la nouvelle heure de début
             nouvelle_heure_debut = timezone.make_aware(
                 datetime(aujourd_hui.year, aujourd_hui.month, aujourd_hui.day, heure, minute)
-            )
+            )+ timedelta(hours=1)
             
             # Récupère toutes les tâches ordonnées
             taches = planning.taches.filter(type_tache='operation').order_by('ordre')
@@ -474,12 +474,15 @@ def modifier_heure_debut(request, operateur_id):
 
 @login_required(login_url='home')
 def superviseur_dashboard(request):
+    if hasattr(request.user, 'operateur_profil') and request.user.operateur_profil is not None:
+        messages.error(request, "🚫 Accès interdit aux opérateurs sur ce panneau.")
+        return redirect('operateur_vue_simple')
     """
     Page superviseur : affiche tous les opérateurs avec leur timeline.
     Un opérateur par carte, avec sa timeline du shift.
     Rafraîchissement automatique toutes les 30 secondes (géré en JS).
     """
-    aujourd_hui  = timezone.localdate()
+    aujourd_hui  = timezone.localdate() + timedelta(hours=1)
     operateurs   = Operateur.objects.all().order_by('shift', 'nom')
 
     operateurs_data = []
@@ -516,8 +519,9 @@ def dashboard_operateur(request, operateur_id):
     Page détaillée d'un opérateur avec sa timeline complète.
     Permet aussi de démarrer/terminer des tâches.
     """
-    operateur   = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
+    operateur   = get_object_or_404(Operateur,
+     id=operateur_id)
+    aujourd_hui = timezone.localdate() + timedelta(hours=1)
 
     # Planning du jour (peut être None si pas encore généré)
     planning = PlanningJournalier.objects.filter(
@@ -536,8 +540,57 @@ def dashboard_operateur(request, operateur_id):
     })
 
 
+@login_required(login_url='home')
+def operateur_vue_simple(request):
+    """
+    Affiche toutes les tâches de l'opérateur pour la journée.
+    L'opérateur peut cliquer sur n'importe quelle tâche pour la terminer.
+    """
+    # S'assurer que l'utilisateur est lié à un profil opérateur
+    if not hasattr(request.user, 'operateur_profil'):
+        messages.error(request, "Votre compte n'est pas associé à un profil opérateur.")
+        return redirect('dashboard')
+
+    # Récupère l'opérateur connecté
+    operateur = request.user.operateur_profil
+    today = timezone.now().date() + timedelta(hours=1)
+    
+    # Cherche le planning du jour pour cet opérateur
+    planning = PlanningJournalier.objects.filter(operateur=operateur, date=today).first()
+    
+    # Liste de toutes les tâches (ordonnées par numéro d'ordre)
+    taches = []
+    if planning:
+        taches = planning.taches.all().order_by('ordre')
+
+    # Récupère les données du modal retard si présentes en session
+    show_modal_retard = request.session.pop('show_modal_retard', False)
+    tache_retard_id = request.session.pop('tache_retard_id', None)
+    retard_minutes = request.session.pop('retard_minutes', None)
+    tache_nom = request.session.pop('tache_nom', None)
+    
+    # Crée un formulaire pour le retard
+    retard_form = RetardForm()
+    tache_retard = None
+    if tache_retard_id:
+        tache_retard = get_object_or_404(TachePlanifiee, id=tache_retard_id)
+
+    # Prépare le contexte pour la template
+    context = {
+        'operateur': operateur,
+        'planning': planning,
+        'taches': taches,
+        'show_modal_retard': show_modal_retard,
+        'retard_form': retard_form,
+        'tache_retard': tache_retard,
+        'retard_minutes': retard_minutes,
+        'tache_nom': tache_nom,
+    }
+    
+    return render(request, 'planning/operateur_vue_simple.html', context)
+
 # ============================================================
-# VUE GÉNÉRER PLANNING — Génère le planning du jour
+# VUE GENERER PLANNING — Génère le planning du jour
 # ============================================================
 
 @login_required(login_url='home')
@@ -547,7 +600,7 @@ def generer_planning(request, operateur_id):
     Redirige vers le dashboard opérateur après génération.
     """
     operateur   = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
+    aujourd_hui = timezone.localdate() + timedelta(hours=1)
 
     # Appelle la fonction utilitaire qui crée les TachePlanifiee
     planning = generer_planning_journalier(operateur, aujourd_hui)
@@ -555,25 +608,6 @@ def generer_planning(request, operateur_id):
     messages.success(request, f"✅ Planning généré pour {operateur} ({planning.taches.count()} tâches)")
     return redirect('dashboard_operateur', operateur_id=operateur_id)
 
-
-# ============================================================
-# VUE DÉMARRER UNE TÂCHE
-# ============================================================
-
-@login_required(login_url='home')
-def demarrer_tache(request, tache_id):
-    """
-    Enregistre l'heure de début RÉELLE d'une tâche (quand l'opérateur clique).
-    Permet de calculer l'écart réel vs prévu.
-    """
-    tache = get_object_or_404(TachePlanifiee, id=tache_id)
-
-    if not tache.heure_debut_reelle:  # on ne démarre pas deux fois
-        tache.heure_debut_reelle = timezone.now()
-        tache.save()
-        messages.success(request, f"▶️ {tache.nom_affichage} démarrée à {tache.heure_debut_reelle.strftime('%H:%M')}")
-
-    return redirect('dashboard_operateur', operateur_id=tache.planning.operateur.id)
 
 
 # ============================================================
@@ -584,22 +618,97 @@ def demarrer_tache(request, tache_id):
 def terminer_tache(request, tache_id):
     """
     Enregistre l'heure de fin RÉELLE d'une tâche.
-    L'écart (retard ou avance) est calculé automatiquement via la @property ecart_fin_minutes.
+    Si la tâche est en retard, affiche le modal de déclaration.
+    Sinon, termine la tâche directement.
     """
     tache = get_object_or_404(TachePlanifiee, id=tache_id)
 
-    if not tache.heure_fin_reelle:  # on ne termine pas deux fois
-        tache.heure_fin_reelle = timezone.now()
-        tache.save()
-        ecart = tache.ecart_fin_minutes
-        if ecart and ecart > 0:
-            messages.warning(request, f"⚠️ {tache.nom_affichage} terminée avec {ecart} min de retard")
-        elif ecart and ecart < 0:
-            messages.success(request, f"✅ {tache.nom_affichage} terminée avec {abs(ecart)} min d'avance")
-        else:
-            messages.success(request, f"✅ {tache.nom_affichage} terminée dans les temps")
+    if tache.heure_fin_reelle:
+        messages.info(request, "Cette tâche est déjà marquée comme terminée.")
+        return redirect('operateur_vue_simple')
 
-    return redirect('dashboard_operateur', operateur_id=tache.planning.operateur.id)
+    heure_fin_reelle = timezone.now()+ timedelta(hours=1)
+
+    retard = heure_fin_reelle - tache.heure_fin_prevue
+
+    # --- CAS 1 : La tâche est en retard ---
+    if retard.total_seconds() > 1:
+        retard_minutes = int(retard.total_seconds() / 60)
+        
+        # Stocke les données en session pour le modal
+        request.session['tache_retard_id'] = tache_id
+        request.session['retard_minutes'] = retard_minutes
+        request.session['tache_nom'] = tache.nom_affichage
+        request.session['show_modal_retard'] = True
+        
+        # Redirige vers la même page avec le modal affiché
+        return redirect('operateur_vue_simple')
+
+    # --- CAS 2 : La tâche est à l'heure ou en avance ---
+    else:
+        tache.heure_fin_reelle = heure_fin_reelle
+        tache.save()
+        messages.success(request, f"✅ Tâche '{tache.nom_affichage}' terminée dans les temps.")
+        return redirect('operateur_vue_simple')
+
+
+
+
+# ============================================================
+# VUE POUR DÉCLARER UN RETARD (NOUVEAU)
+# ============================================================
+@login_required(login_url='home')
+def declarer_retard(request, tache_id):
+    """
+    Affiche un formulaire pour que l'opérateur justifie un retard.
+    Enregistre ensuite le retard et termine la tâche.
+    """
+    # Récupère la tâche concernée par le retard.
+    tache = get_object_or_404(TachePlanifiee, id=tache_id)
+    
+    # Calcule la durée du retard en se basant sur l'heure actuelle.
+    heure_actuelle = timezone.now() + timedelta(hours=1)
+    retard_duree = heure_actuelle - tache.heure_fin_prevue
+
+    # Convertit la durée du retard en minutes pour l'affichage.
+    retard_minutes = int(retard_duree.total_seconds() / 60)
+
+    # Si la méthode est POST, cela signifie que l'opérateur a soumis le formulaire.
+    if request.method == 'POST':
+        # Crée une instance du formulaire avec les données envoyées.
+        form = RetardForm(request.POST)
+        
+        # Vérifie si le formulaire est valide (ex: une cause a bien été sélectionnée).
+        if form.is_valid():
+            # Marque la tâche comme terminée en enregistrant l'heure actuelle.
+            tache.heure_fin_reelle = heure_actuelle
+            tache.save()
+
+            # Crée l'objet Retard mais ne le sauvegarde pas tout de suite en base de données.
+            retard_obj = form.save(commit=False)
+            retard_obj.tache = tache           # Associe le retard à la tâche.
+            retard_obj.duree = retard_duree    # Enregistre la durée calculée du retard.
+            retard_obj.save()                  # Sauvegarde l'objet Retard en base de données.
+
+            # Affiche un message de succès.
+            messages.success(request, "La cause du retard a bien été enregistrée.")
+            
+            # Redirige l'opérateur vers sa page de travail.
+            return redirect('operateur_vue_simple')
+    
+    # Si la méthode est GET, on affiche simplement le formulaire vide.
+    else:
+        form = RetardForm()
+
+    # Prépare le contexte à envoyer au template HTML.
+    context = {
+        'form': form,
+        'tache': tache,
+        'retard_minutes': retard_minutes,
+    }
+    # Affiche la page HTML du formulaire de retard.
+    return render(request, 'planning/declarer_retard.html', context)
+
 
 
 # ============================================================
@@ -613,7 +722,7 @@ def rafraichir_operateur(request, operateur_id):
     Utile pour recommencer à zéro.
     """
     operateur = get_object_or_404(Operateur, id=operateur_id)
-    aujourd_hui = timezone.localdate()
+    aujourd_hui = timezone.localdate() + timedelta(hours=1)
 
     # Récupère toutes les gammes assignées à cet opérateur
     gammes = operateur.gammes.all()
@@ -686,8 +795,8 @@ def deplacer_tache(request, tache_id, direction):
     h_debut, m_debut = operateur.shift_debut_hm
     heure_courante = timezone.make_aware(
         datetime(planning.date.year, planning.date.month, planning.date.day, h_debut, m_debut)
-    )
-    
+    ) + timedelta(hours=1)
+
     # Réassigne l'ordre et les heures
     for i, t in enumerate(taches):
         t.ordre = i + 1  # L'ordre recommence à 1
@@ -704,34 +813,125 @@ def deplacer_tache(request, tache_id, direction):
 
 
 
-
-
-
-
-
+# ============================================================
+# DASHBOARD DIRECTEUR DE PRODUCTION
+# ============================================================
 
 @login_required(login_url='home')
-def declarer_alea(request, operation_id):
+def dashboard_directeur(request):
     """
-    Vue pour déclarer un aléa (problème) pendant une opération
+    Dashboard pour le directeur de production.
     """
-    operation = get_object_or_404(OperationOF, id=operation_id)
     
-    if request.method == 'POST':
-        form = AleaForm(request.POST)
-        if form.is_valid():
-            alea = form.save(commit=False)
-            alea.operation = operation
-            alea.save()
-            messages.success(request, f"⚠️ Aléa enregistré : {alea.get_type_alea_display()}")
-            return redirect('detail_of', numero_of=operation.of.numero)
+    # ============ 1. RÉCUPÉRER TOUS LES RETARDS ============
+    tous_les_retards = Retard.objects.all()
+    
+    # ============ 2. PARETO PAR CAUSE ============
+    retards_par_cause = {}
+    
+    for retard in tous_les_retards:
+        nom_cause = retard.cause.nom
+        
+        if nom_cause not in retards_par_cause:
+            retards_par_cause[nom_cause] = 0
+        
+        # Convertir en HEURES (diviser par 3600 secondes)
+        retards_par_cause[nom_cause] += retard.duree.total_seconds() / 3600
+    
+    retards_par_cause_triee = dict(sorted(
+        retards_par_cause.items(),
+        key=lambda x: x[1],
+        reverse=True
+    ))
+    
+    causes_noms = list(retards_par_cause_triee.keys())
+    causes_heures = list(retards_par_cause_triee.values())
+    
+    # ============ 3. PARETO PAR OPÉRATEUR ============
+    retards_par_operateur = {}
+    
+    for retard in tous_les_retards:
+        operateur = retard.tache.planning.operateur
+        nom_operateur = f"{operateur.prenom} {operateur.nom}"
+        
+        if nom_operateur not in retards_par_operateur:
+            retards_par_operateur[nom_operateur] = 0
+        
+        # Convertir en HEURES
+        retards_par_operateur[nom_operateur] += retard.duree.total_seconds() / 3600
+    
+    retards_par_operateur_triee = dict(sorted(
+        retards_par_operateur.items(),
+        key=lambda x: x[1],
+        reverse=True
+    ))
+    
+    operateurs_noms = list(retards_par_operateur_triee.keys())
+    operateurs_heures = list(retards_par_operateur_triee.values())
+    
+    # ============ 4. STATISTIQUES CUMULÉES ============
+    
+    # Total en HEURES
+    total_retards_heures = sum(retard.duree.total_seconds() / 3600 for retard in tous_les_retards)
+    
+    nombre_total_retards = tous_les_retards.count()
+    
+    if nombre_total_retards > 0:
+        retard_moyen_heures = total_retards_heures / nombre_total_retards
     else:
-        form = AleaForm()
+        retard_moyen_heures = 0
     
+    retard_max_heures = 0
+    if tous_les_retards.exists():
+        retard_max_heures = max(retard.duree.total_seconds() / 3600 for retard in tous_les_retards)
+    
+    # ============ 5. STATISTIQUES PAR PÉRIODE ============
+    
+    aujourd_hui = timezone.now() + timedelta(hours=1)
+    premier_jour_mois = aujourd_hui.replace(day=1)
+    
+    retards_mois = tous_les_retards
+    retards_mois_heures = sum(retard.duree.total_seconds() / 3600 for retard in retards_mois)
+    nombre_retards_mois = retards_mois.count()
+    
+    premier_jour_annee = aujourd_hui.replace(month=1, day=1)
+    
+    retards_annee = tous_les_retards
+    retards_annee_heures = sum(retard.duree.total_seconds() / 3600 for retard in retards_annee)
+    nombre_retards_annee = retards_annee.count()
+    
+    # ============ 6. PRÉPARER LE CONTEXTE ============
     context = {
-        'form': form,
-        'operation': operation,
+        # Pareto par cause (en heures)
+        'causes_noms': causes_noms,
+        'causes_heures': causes_heures,
+        
+        # Pareto par opérateur (en heures)
+        'operateurs_noms': operateurs_noms,
+        'operateurs_heures': operateurs_heures,
+        
+        # Statistiques globales (en heures)
+        'total_retards_heures': round(total_retards_heures, 2),
+        'nombre_total_retards': nombre_total_retards,
+        'retard_moyen_heures': round(retard_moyen_heures, 2),
+        'retard_max_heures': round(retard_max_heures, 2),
+        
+        # Statistiques mois (en heures)
+        'retards_mois_heures': round(retards_mois_heures, 2),
+        'nombre_retards_mois': nombre_retards_mois,
+        
+        # Statistiques année (en heures)
+        'retards_annee_heures': round(retards_annee_heures, 2),
+        'nombre_retards_annee': nombre_retards_annee,
+        
+        # Date
+        'aujourd_hui': aujourd_hui,
     }
-    return render(request, 'of/declarer_alea.html', context)
+    
+    return render(request, 'directeur/dashboard_directeur.html', context)
+
+
+
+
 
 

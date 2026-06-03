@@ -1,0 +1,294 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Directeur Production{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    <!-- En-tête -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="display-5">📊 Dashboard Directeur de Production</h1>
+            <p class="text-muted">Date: {{ aujourd_hui|date:"d/m/Y H:i" }}</p>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 1 : KPI GLOBAUX -->
+    <!-- ============================================================ -->
+    <div class="row mb-4">
+        
+        <!-- KPI 1 : Total Retards -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-6 text-danger">{{ nombre_total_retards }}</div>
+                    <p class="text-muted mb-0">Nombre total de retards</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 2 : Total Heures Retard -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-6 text-warning">{{ total_retards_heures }}h</div>
+                    <p class="text-muted mb-0">Heures de retard cumulées</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 3 : Retard Moyen -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-6 text-info">{{ retard_moyen_heures }}h</div>
+                    <p class="text-muted mb-0">Retard moyen</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI 4 : Retard Maximum -->
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body text-center">
+                    <div class="display-6 text-primary">{{ retard_max_heures }}h</div>
+                    <p class="text-muted mb-0">Retard maximum</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 2 : PARETO PAR CAUSE (VERTICAL) -->
+    <!-- ============================================================ -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar"></i> Pareto des Retards par Cause
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="paretoParCause" style="max-height: 400px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- SECTION 3 : PARETO PAR OPÉRATEUR (VERTICAL) -->
+        <!-- ============================================================ -->
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar"></i> Pareto des Retards par Opérateur
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="paretoParOperateur" style="max-height: 400px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 4 : STATISTIQUES PAR PÉRIODE (CHARTS) -->
+    <!-- ============================================================ -->
+    <div class="row mb-4">
+        
+        <!-- Statistiques du MOIS -->
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar-alt"></i> Statistiques du Mois
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="charMois" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistiques de L'ANNÉE -->
+        <div class="col-md-6">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-calendar"></i> Statistiques de l'Année
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="chartAnnee" style="max-height: 300px;"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SECTION 5 : BOUTONS D'EXPORT -->
+    <!-- ============================================================ -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-download"></i> Exporter les Données
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-success me-2" onclick="exporterEnExcel()">
+                        <i class="fas fa-file-excel"></i> Exporter en Excel
+                    </button>
+                    <button class="btn btn-danger" onclick="exporterEnPDF()">
+                        <i class="fas fa-file-pdf"></i> Exporter en PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- CHART.JS POUR LES GRAPHIQUES -->
+<!-- ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+<script>
+    // ===== PARETO PAR CAUSE (VERTICAL) =====
+    const ctxCause = document.getElementById('paretoParCause').getContext('2d');
+    new Chart(ctxCause, {
+        type: 'bar',
+        data: {
+            labels: {{ causes_noms|safe }},
+            datasets: [{
+                label: 'Heures de retard',
+                data: {{ causes_heures|safe }},
+                backgroundColor: '#FF6384',
+                borderColor: '#2c3e50',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Heures',
+                    }
+                }
+            }
+        }
+    });
+
+    // ===== PARETO PAR OPÉRATEUR (VERTICAL) =====
+    const ctxOperateur = document.getElementById('paretoParOperateur').getContext('2d');
+    new Chart(ctxOperateur, {
+        type: 'bar',
+        data: {
+            labels: {{ operateurs_noms|safe }},
+            datasets: [{
+                label: 'Heures de retard',
+                data: {{ operateurs_heures|safe }},
+                backgroundColor: '#27AE60',
+                borderColor: '#2c3e50',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                },
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Heures',
+                    }
+                }
+            }
+        }
+    });
+
+    // ===== CHART STATISTIQUES MOIS =====
+    const ctxMois = document.getElementById('charMois').getContext('2d');
+    new Chart(ctxMois, {
+        type: 'doughnut',
+        data: {
+            labels: ['Nombre de retards', 'Heures cumulées'],
+            datasets: [{
+                data: [{{ nombre_retards_mois }}, {{ retards_mois_heures }}],
+                backgroundColor: ['#F39C12', '#E74C3C'],
+                borderColor: '#2c3e50',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                }
+            }
+        }
+    });
+
+    // ===== CHART STATISTIQUES ANNÉE =====
+    const ctxAnnee = document.getElementById('chartAnnee').getContext('2d');
+    new Chart(ctxAnnee, {
+        type: 'doughnut',
+        data: {
+            labels: ['Nombre de retards', 'Heures cumulées'],
+            datasets: [{
+                data: [{{ nombre_retards_annee }}, {{ retards_annee_heures }}],
+                backgroundColor: ['#3498DB', '#9B59B6'],
+                borderColor: '#2c3e50',
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                }
+            }
+        }
+    });
+
+    // ===== EXPORT EXCEL =====
+    function exporterEnExcel() {
+        alert('Fonction d\'export Excel en développement');
+    }
+
+    // ===== EXPORT PDF =====
+    function exporterEnPDF() {
+        alert('Fonction d\'export PDF en développement');
+    }
+</script>
+
+{% endblock %}

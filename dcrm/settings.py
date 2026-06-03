@@ -13,7 +13,19 @@ SECRET_KEY = 'django-insecure-jcxge@8cwms-4-$&qia^6p+^8-qwrsw7vey#0e6e326apg3mvo
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    'playroom-resurface-resonate.ngrok-free.dev',
+]
+
+# ✅ AJOUTER CES LIGNES POUR NGROK
+CSRF_TRUSTED_ORIGINS = [
+    'https://playroom-resurface-resonate.ngrok-free.dev',
+]
+
+# Pour ngrok, autorisez les headers ngrok
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Application definition

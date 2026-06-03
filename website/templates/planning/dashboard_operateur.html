@@ -4,13 +4,12 @@
 {% block title %}Planning — {{ operateur }}{% endblock %}
 
 {% block content %}
+{% with user_group=user.groups.all|first %}
 <div class="container-fluid mt-3 px-4">
 
-  <!-- ══ EN-TÊTE ══════════════════════════════════════════════ -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div class="d-flex align-items-center gap-3">
 
-      <!-- Avatar -->
       <div class="op-avatar op-avatar--{{ operateur.shift }}" style="width:56px;height:56px;font-size:20px;">
         {{ operateur.prenom|first|upper }}{{ operateur.nom|first|upper }}
       </div>
@@ -27,44 +26,49 @@
 
     <div class="d-flex gap-2 align-items-center">
       <span class="badge bg-dark fs-6 px-3"><i class="fas fa-clock"></i> <span id="clock">--:--</span></span>
-      <a href="{% url 'assigner_gammes' operateur.id %}" class="btn btn-warning btn-sm">
-        ⚙️ Assigner gammes
-      </a>
-      {% if planning %}
-      <a href="{% url 'modifier_heure_debut' operateur_id=operateur.id %}" class="btn btn-info btn-sm">
-        ⏰ Modifier heure début
-      </a>
+      
+      <!-- ✅ VÉRIFIER SI L'UTILISATEUR N'EST PAS OPÉRATEUR -->
+      {% if user_group.name != 'Operateur' %}
+        <a href="{% url 'assigner_gammes' operateur.id %}" class="btn btn-warning btn-sm">
+          ⚙️ Assigner gammes
+        </a>
+        {% if planning %}
+        <a href="{% url 'modifier_heure_debut' operateur_id=operateur.id %}" class="btn btn-info btn-sm">
+          ⏰ Modifier heure début
+        </a>
+        {% endif %}
+        <a href="{% url 'rafraichir_operateur' operateur_id=operateur.id %}"
+           class="btn btn-danger btn-sm"
+           onclick="return confirm('⚠️ ATTENTION : Cela va supprimer TOUTES les gammes assignées et le planning du jour. Continuer ?')">
+          <i class="fas fa-refresh"></i> Rafraîchir
+        </a>
+        <a href="{% url 'generer_planning' operateur_id=operateur.id %}"
+           class="btn btn-primary btn-sm"
+           onclick="return confirm('Régénérer le planning ?')">
+          <i class="fas fa-sync-alt"></i>
+          {% if planning %}Régénérer{% else %}Générer{% endif %}
+        </a>
+        <a href="{% url 'superviseur_dashboard' %}" class="btn btn-outline-secondary btn-sm">
+          ← Superviseur
+        </a>
       {% endif %}
-      <a href="{% url 'rafraichir_operateur' operateur_id=operateur.id %}"
-         class="btn btn-danger btn-sm"
-         onclick="return confirm('⚠️ ATTENTION : Cela va supprimer TOUTES les gammes assignées et le planning du jour. Continuer ?')">
-        <i class="fas fa-refresh"></i> Rafraîchir
-      </a>
-      <a href="{% url 'generer_planning' operateur_id=operateur.id %}"
-         class="btn btn-primary btn-sm"
-         onclick="return confirm('Régénérer le planning ?')">
-        <i class="fas fa-sync-alt"></i>
-        {% if planning %}Régénérer{% else %}Générer{% endif %}
-      </a>
-      <a href="{% url 'superviseur_dashboard' %}" class="btn btn-outline-secondary btn-sm">
-        ← Superviseur
-      </a>
     </div>
   </div>
 
-  <!-- ══ ALERTES ══════════════════════════════════════════════ -->
   {% if not has_gammes %}
     <div class="alert alert-warning">
       <i class="fas fa-exclamation-triangle"></i>
       Aucune gamme assignée à cet opérateur.
-      <a href="{% url 'assigner_gammes' operateur.id %}">Assigner →</a>
+      {% if user_group.name != 'Operateur' %}
+        <a href="{% url 'assigner_gammes' operateur.id %}">Assigner →</a>
+      {% endif %}
     </div>
   {% endif %}
   {% if not planning %}
     <div class="alert alert-info">
       <i class="fas fa-info-circle"></i>
       Pas de planning pour aujourd'hui.
-      {% if has_gammes %}
+      {% if has_gammes and user_group.name != 'Operateur' %}
         <a href="{% url 'generer_planning' operateur_id=operateur.id %}">Générer →</a>
       {% endif %}
     </div>
@@ -72,7 +76,6 @@
 
   {% if planning %}
 
-  <!-- ══ KPI ══════════════════════════════════════════════════ -->
   <div class="row g-3 mb-4">
     <div class="col-sm-4">
       <div class="card border-0 shadow-sm text-center py-3">
@@ -108,14 +111,12 @@
     </div>
   </div>
 
-  <!-- ══ TIMELINE ═════════════════════════════════════════════ -->
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-dark text-white">
       <h5 class="mb-0"><i class="fas fa-stream"></i> Timeline du shift</h5>
     </div>
     <div class="card-body">
 
-      <!-- Axe horaire -->
       <div style="position:relative; height:18px; margin-bottom:4px;">
         {% for label in timeline_data.timeline_hours %}
         <span style="position:absolute; left:{{ label.pct }}%; font-size:11px;
@@ -123,7 +124,6 @@
         {% endfor %}
       </div>
 
-      <!-- Barre principale -->
       <div class="tl-bar">
         {% for td in timeline_data.taches_display %}
         <div class="tl-bloc tl-{{ td.couleur }}"
@@ -134,14 +134,11 @@
         </div>
         {% endfor %}
 
-        <!-- Ligne maintenant -->
         <div class="tl-now" id="tl-now" style="left:{{ timeline_data.now_pct }}%">
-          <!-- Affiche l'heure exacte avec les secondes pour plus de précision -->
           <span class="tl-now-label" id="tl-now-label">{{ timeline_data.maintenant|date:"H:i:s" }}</span>
         </div>
       </div>
 
-      <!-- Légende -->
       <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
         <span><span class="legend-dot" style="background:#0d6efd"></span> En cours</span>
         <span><span class="legend-dot" style="background:#198754"></span> Terminé</span>
@@ -153,7 +150,6 @@
     </div>
   </div>
 
-  <!-- ══ TABLE DES TÂCHES ══════════════════════════════════════ -->
   <div class="card border-0 shadow-sm">
     <div class="card-header bg-light">
       <h5 class="mb-0"><i class="fas fa-tasks"></i> Détail des opérations</h5>
@@ -173,7 +169,9 @@
               <th>Écart</th>
               <th>Statut</th>
               <th>Action</th>
-              <th>Réordonner</th>
+              {% if user_group.name != 'Operateur' %}
+                <th>Réordonner</th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -205,43 +203,41 @@
                 {% elif tache.statut == 'en_retard_demarrage' %}<span class="badge bg-danger">⚠️ Non démarré</span>
                 {% else %}<span class="badge bg-secondary">⏱️ En attente</span>{% endif %}
               </td>
+              
               <td>
-                {% if tache.statut == 'en_attente' or tache.statut == 'en_retard_demarrage' %}
-                  <a href="{% url 'demarrer_tache' tache_id=tache.id %}"
-                     class="btn btn-sm btn-success"
-                     onclick="return confirm('Démarrer maintenant ?')">
-                    <i class="fas fa-play"></i>
-                  </a>
-                {% elif tache.statut == 'en_cours' %}
-                  <a href="{% url 'terminer_tache' tache_id=tache.id %}"
-                     class="btn btn-sm btn-warning"
-                     onclick="return confirm('Terminer maintenant ?')">
-                    <i class="fas fa-stop"></i>
-                  </a>
+                {% if user_group.name != 'Operateur' %}
+                  {% if tache.statut == 'en_cours' %}
+                    <a href="{% url 'terminer_tache' tache_id=tache.id %}"
+                       class="btn btn-sm btn-warning"
+                       onclick="return confirm('Terminer maintenant ?')">
+                      <i class="fas fa-stop"></i>
+                    </a>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
                 {% else %}
                   <span class="text-muted">—</span>
                 {% endif %}
               </td>
-              <!-- Boutons pour réordonner les tâches -->
+              
+              {% if user_group.name != 'Operateur' %}
               <td>
                 {% if tache.statut == 'en_attente' %}
-                  <!-- Bouton monter (↑) -->
                   <a href="{% url 'deplacer_tache' tache_id=tache.id direction='up' %}"
                      class="btn btn-sm btn-outline-secondary"
                      title="Monter cette tâche">
                     <i class="fas fa-arrow-up"></i>
                   </a>
-                  <!-- Bouton descendre (↓) -->
                   <a href="{% url 'deplacer_tache' tache_id=tache.id direction='down' %}"
                      class="btn btn-sm btn-outline-secondary"
                      title="Descendre cette tâche">
                     <i class="fas fa-arrow-down"></i>
                   </a>
                 {% else %}
-                  <!-- Les tâches en cours/terminées ne peuvent pas être déplacées -->
                   <span class="text-muted" title="Impossible de réordonner">—</span>
                 {% endif %}
               </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>
@@ -253,7 +249,6 @@
   {% endif %}
 </div>
 
-<!-- Styles partagés avec superviseur -->
 <style>
   .op-avatar {
     border-radius: 50%; display: flex; align-items: center;
@@ -291,48 +286,39 @@
   function pad(n) { return String(n).padStart(2,'0'); }
 
   // ══ RÉCUPÈRE LES INFOS DU SHIFT (une seule fois) ══
-  const SHIFT_START = {{ operateur.shift_debut_minutes }};  // Minutes depuis minuit
-  const SHIFT_DUREE = {{ operateur.shift_duree_minutes }};  // Durée totale en minutes
+  const SHIFT_START = {{ operateur.shift_debut_minutes }};
+  const SHIFT_DUREE = {{ operateur.shift_duree_minutes }};
 
   console.log('✅ Shift début (minutes):', SHIFT_START);
   console.log('✅ Shift durée (minutes):', SHIFT_DUREE);
 
   // ══ FONCTION: Mettre à jour l'horloge ET la timeline ══
   function tick() {
-    // Récupère l'heure UTC/GMT+0 actuelle
     const d = new Date();
-    const utcHours = d.getUTCHours();
-    const utcMinutes = d.getUTCMinutes();
-    const utcSeconds = d.getUTCSeconds();
+    
+    let hours = d.getHours() + 1;
+    if (hours >= 24) hours -= 24;
+    const minutes = d.getMinutes();
+    const seconds = d.getSeconds();
 
-    // ✅ MET À JOUR L'HORLOGE EN HAUT À DROITE
     const clockEl = document.getElementById('clock');
     if (clockEl) {
-      clockEl.textContent = `${pad(utcHours)}:${pad(utcMinutes)}`;
+      clockEl.textContent = `${pad(hours)}:${pad(minutes)}`;
     }
 
-    // Calcule les minutes depuis minuit en GMT+0
-    const min = utcHours * 60 + utcMinutes + utcSeconds / 60;
-    
-    // Calcule le pourcentage sur la timeline (0 à 100%)
+    const min = hours * 60 + minutes + seconds / 60;
     const pct = Math.max(0, Math.min(100, (min - SHIFT_START) / SHIFT_DUREE * 100));
 
-    // ✅ MET À JOUR LA LIGNE "MAINTENANT" SUR LA TIMELINE
     const line = document.getElementById('tl-now');
     if (line) line.style.left = pct + '%';
 
-    // ✅ MET À JOUR LE LABEL DE L'HEURE SUR LA TIMELINE
     const lbl = document.getElementById('tl-now-label');
-    if (lbl) lbl.textContent = `${pad(utcHours)}:${pad(utcMinutes)}`;
+    if (lbl) lbl.textContent = `${pad(hours)}:${pad(minutes)}`;
   }
 
-  // Appelle tick() immédiatement pour mettre à jour au chargement
   tick();
-
-  // ✅ MET À JOUR CHAQUE MINUTE (60 secondes)
   setInterval(tick, 60000);
-
-  // Rafraîchit la page toutes les 30 minutes pour les données serveur
   setTimeout(() => location.reload(), 1800000);
 </script>
+{% endwith %}
 {% endblock %}

@@ -196,7 +196,6 @@ class TachePlanifiee(models.Model):
     ordre              = models.PositiveSmallIntegerField()
     heure_debut_prevue = models.DateTimeField()
     heure_fin_prevue   = models.DateTimeField()
-    heure_debut_reelle = models.DateTimeField(null=True, blank=True)
     heure_fin_reelle   = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -235,11 +234,9 @@ class TachePlanifiee(models.Model):
             return 'pause'
         if self.heure_fin_reelle:
             return 'termine'
-        if self.heure_debut_reelle:
-            return 'en_cours'
         now = timezone.now()
         if now >= self.heure_debut_prevue:
-            return 'en_retard_demarrage'
+            return 'en cours'
         return 'en_attente'
 
     @property
@@ -501,23 +498,22 @@ class OperationOF(models.Model):
 
 
 # ─── Aléa ─────────────────────────────────────────────────────
-class Alea(models.Model):
+# ─── Cause d'un retard (table de référence) ───────────────────
+class CauseRetard(models.Model):
+    nom = models.CharField(max_length=100, unique=True)
 
-    TYPE_CHOICES = [
-        ('attente',          'Attente'),
-        ('deplacement',      'Déplacement inutile'),
-        ('panne',            'Panne machine'),
-        ('manque_matiere',   'Manque matière'),
-        ('rebus',            'Rebus / non-conformité'),
-        ('autre',            'Autre'),
-    ]
+    def __str__(self):
+        return self.nom
 
-    operation   = models.ForeignKey(OperationOF, on_delete=models.CASCADE)
-    type_alea   = models.CharField(max_length=30, choices=TYPE_CHOICES)
-    description = models.TextField(blank=True)
-    duree       = models.PositiveIntegerField(help_text="Durée en minutes", default=0)
-    declare_par = models.ForeignKey(Operateur, null=True, blank=True, on_delete=models.SET_NULL)
+# ─── Enregistrement d'un retard sur une tâche ──────────────────
+class Retard(models.Model):
+    tache       = models.OneToOneField(TachePlanifiee, on_delete=models.CASCADE)
+    cause       = models.ForeignKey(CauseRetard, on_delete=models.PROTECT, verbose_name="Cause du retard")
+    duree       = models.DurationField(help_text="Durée du retard")
+    description = models.TextField(blank=True, null=True, verbose_name="Description (optionnel)")
     cree_le     = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.get_type_alea_display()} sur {self.operation} ({self.duree} min)"
+        return f"Retard pour {self.tache} à cause de {self.cause}"
+    
+    

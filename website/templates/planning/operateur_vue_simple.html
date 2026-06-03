@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block title %}Mon Poste de Travail{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    
+    <!-- En-tête de la page -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1 class="display-5">📋 Mon Poste de Travail</h1>
+            <p class="lead text-muted">{{ operateur.prenom }} {{ operateur.nom }}</p>
+        </div>
+    </div>
+
+    <!-- Vérification si un planning existe -->
+    {% if planning and taches %}
+        
+        <!-- Timeline des tâches -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">⏰ Timeline des opérations du jour</h5>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- Liste des tâches en timeline verticale -->
+                        <div class="timeline">
+                            {% for tache in taches %}
+                            <div class="timeline-item {% if tache.heure_fin_reelle %}completed{% endif %}">
+                                
+                                <!-- Cercle/indicateur de statut -->
+                                <div class="timeline-marker {% if tache.heure_fin_reelle %}bg-success{% else %}bg-primary{% endif %}">
+                                    {% if tache.heure_fin_reelle %}
+                                        <i class="fas fa-check"></i>
+                                    {% else %}
+                                        <span>{{ tache.ordre }}</span>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Contenu de la tâche -->
+                                <div class="timeline-content">
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-body">
+                                            <div class="row align-items-center">
+                                                
+                                                <!-- Informations de la tâche -->
+                                                <div class="col-md-8">
+                                                    <h5 class="card-title mb-2">
+                                                        {{ tache.nom_affichage }}
+                                                    </h5>
+                                                    <div class="row text-muted small">
+                                                        <div class="col-md-6">
+                                                            <p class="mb-1">
+                                                                <i class="fas fa-clock"></i>
+                                                                Début : <strong>{{ tache.heure_debut_prevue|time:"H:i" }}</strong>
+                                                            </p>
+                                                            <p class="mb-0">
+                                                                <i class="fas fa-flag-checkered"></i>
+                                                                Fin prévue : <strong>{{ tache.heure_fin_prevue|time:"H:i" }}</strong>
+                                                            </p>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <p class="mb-1">
+                                                                <i class="fas fa-hourglass-half"></i>
+                                                                Durée : <strong>{{ tache.duree_minutes }} min</strong>
+                                                            </p>
+                                                            {% if tache.heure_fin_reelle %}
+                                                                <p class="mb-0">
+                                                                    <i class="fas fa-check-circle text-success"></i>
+                                                                    Terminée à : <strong>{{ tache.heure_fin_reelle|time:"H:i" }}</strong>
+                                                                </p>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Bouton d'action -->
+                                                <div class="col-md-4 text-end">
+                                                    {% if not tache.heure_fin_reelle %}
+                                                        <!-- Si la tâche n'est pas terminée, affiche le bouton "Terminer" -->
+                                                        <a 
+                                                            href="{% url 'terminer_tache' tache_id=tache.id %}" 
+                                                            class="btn btn-success btn-sm"
+                                                            onclick="return confirm('Confirmez-vous avoir terminé cette tâche ?');"
+                                                        >
+                                                            <i class="fas fa-check-circle"></i> Terminer
+                                                        </a>
+                                                    {% else %}
+                                                        <!-- Si la tâche est déjà terminée, affiche un badge -->
+                                                        <span class="badge bg-success fs-6">
+                                                            <i class="fas fa-check"></i> Terminée
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    {% elif planning %}
+        <!-- Toutes les tâches sont terminées -->
+        <div class="alert alert-success text-center p-5">
+            <i class="fas fa-check-circle fa-3x mb-3"></i>
+            <h3 class="alert-heading">Excellent travail !</h3>
+            <p class="lead">Toutes les tâches de la journée sont terminées.</p>
+        </div>
+    {% else %}
+        <!-- Aucun planning -->
+        <div class="alert alert-warning text-center p-5">
+            <i class="fas fa-calendar-times fa-3x mb-3"></i>
+            <h3 class="alert-heading">Aucun planning</h3>
+            <p class="lead">Aucun planning n'a été généré pour vous aujourd'hui.</p>
+            <p class="text-muted">Contactez votre superviseur.</p>
+        </div>
+    {% endif %}
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════ -->
+<!-- MODAL RETARD — Responsive et simple -->
+<!-- ════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalRetard" tabindex="-1" aria-labelledby="modalRetardLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-danger border-3">
+            
+            <!-- En-tête du modal -->
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalRetardLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Retard détecté
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fermer"></button>
+            </div>
+
+            <!-- Corps du modal -->
+            <div class="modal-body">
+                
+                <!-- Info du retard -->
+                <div class="alert alert-warning mb-3" role="alert">
+                    <p class="mb-1"><strong>Tâche :</strong> {{ tache_nom }}</p>
+                    <p class="mb-0"><strong>Retard :</strong> <span class="badge bg-danger">+{{ retard_minutes }} min</span></p>
+                </div>
+
+                <!-- Formulaire de retard -->
+                {% if tache_retard %}
+                <form method="POST" action="{% url 'declarer_retard' tache_id=tache_retard.id %}" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Cause du retard -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-list"></i> Cause du retard <span class="text-danger">*</span>
+                        </label>
+                        {{ retard_form.cause }}
+                        {% if retard_form.cause.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ retard_form.cause.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <small class="text-muted d-block mt-1">Sélectionnez la cause principale</small>
+                    </div>
+
+                    <!-- Durée calculée (affichage) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-clock"></i> Durée du retard
+                        </label>
+                        <div class="input-group">
+                            <input type="text" class="form-control bg-light" value="{{ retard_minutes }} min" disabled>
+                        </div>
+                        <small class="text-muted d-block mt-1">Calculée automatiquement</small>
+                    </div>
+
+                    <!-- Description (optionnel) -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-file-alt"></i> Description (optionnel)
+                        </label>
+                        {{ retard_form.description }}
+                        {% if retard_form.description.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ retard_form.description.errors.0 }}
+                            </div>
+                        {% endif %}
+                        <small class="text-muted d-block mt-1">Ajoutez des détails si nécessaire</small>
+                    </div>
+
+                    <!-- Boutons -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger btn-lg">
+                            <i class="fas fa-save"></i> Enregistrer et continuer
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times"></i> Annuler
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CSS pour la timeline -->
+<style>
+    .timeline {
+        position: relative;
+        padding: 20px 0;
+    }
+
+    .timeline-item {
+        display: flex;
+        margin-bottom: 30px;
+        position: relative;
+    }
+
+    /* Ligne verticale entre les items */
+    .timeline-item:not(:last-child)::before {
+        content: '';
+        position: absolute;
+        left: 24px;
+        top: 60px;
+        width: 2px;
+        height: 30px;
+        background-color: #dee2e6;
+    }
+
+    .timeline-marker {
+        min-width: 50px;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        flex-shrink: 0;
+        margin-right: 20px;
+    }
+
+    .timeline-marker.bg-success {
+        background-color: #198754;
+    }
+
+    .timeline-marker.bg-primary {
+        background-color: #0d6efd;
+    }
+
+    .timeline-content {
+        flex-grow: 1;
+    }
+
+    .timeline-item.completed .timeline-marker {
+        background-color: #198754;
+    }
+</style>
+
+<!-- Script pour afficher le modal automatiquement -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if show_modal_retard %}
+        // Attend un peu pour que Bootstrap soit prêt
+        setTimeout(function() {
+            var modalElement = document.getElementById('modalRetard');
+            if (modalElement) {
+                var modalRetard = new bootstrap.Modal(modalElement, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+                modalRetard.show();
+            }
+        }, 300);
+        {% endif %}
+    });
+</script>
+
+{% endblock %}
