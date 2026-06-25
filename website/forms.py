@@ -223,3 +223,16 @@ class AssignerGammesForm(forms.Form):
         # Affiche le nom et l'ordre pour chaque gamme
         self.fields['gammes'].label_from_instance = lambda obj: f"{obj.ordre}. {obj.nom} ({obj.temps_alloue}h)"
 
+
+# ===== FORMULAIRE D'IMPORT EXCEL =====
+class ImportGammesExcelForm(forms.Form):
+    """Formulaire pour importer des gammes depuis un fichier Excel"""
+    fichier_excel = forms.FileField(
+        label='📁 Fichier Excel (.xlsx)',
+        help_text='Format attendu: Nom de l\'opération | Temps alloué (heures) | Ordre',
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.xlsx,.xls',
+        })
+    )
+

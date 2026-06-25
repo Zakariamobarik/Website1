@@ -14,11 +14,12 @@ urlpatterns = [
     path('logout/', views.logout_user, name='logout'),
     path('dashboard/', views.dashboard, name='dashboard'),
 
-# ==================== AUTHENTIFICATION =======================================
+# ==================== gamme =======================================
     path('gammes/', views.gammes_list, name='gammes_list'),
     path('gamme/ajouter/', views.gamme_form, name='ajouter_gamme'),  # Ajouter (id=None)
     path('gamme/<int:id>/modifier/', views.gamme_form, name='modifier_gamme'),  # Modifier
     path('gamme/<int:id>/supprimer/', views.supprimer_gamme, name='supprimer_gamme'),  # Supprimer
+    path('gamme/importer-excel/', views.importer_gammes_excel, name='importer_gammes_excel'),  # NOUVEAU
 
 # ==================== Opérateurs  =======================================
 

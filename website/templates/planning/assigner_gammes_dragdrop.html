@@ -14,6 +14,24 @@
         <p class="text-muted">Opérateur: <strong>{{ operateur.prenom }} {{ operateur.nom }}</strong></p>
       </div>
 
+      <!-- ✅ BARRE DE RECHERCHE -->
+      <div class="mb-4">
+        <div class="input-group input-group-lg">
+          <span class="input-group-text bg-light">
+            <i class="fas fa-search"></i>
+          </span>
+          <input 
+            type="text" 
+            id="searchGamemes" 
+            class="form-control form-control-lg"
+            placeholder="🔍 Rechercher une gamme disponible..."
+            autocomplete="off">
+          <span class="input-group-text bg-light">
+            <small id="resultCount" class="text-muted">0 résultat(s)</small>
+          </span>
+        </div>
+      </div>
+
       <!-- INTERFACE DRAG & DROP -->
       <div class="row g-4">
         
@@ -28,7 +46,10 @@
               <!-- Zone de gammes disponibles -->
               <div id="gammes-disponibles" class="gammes-list">
                 {% for gamme in gammes_disponibles %}
-                  <div class="gamme-item" draggable="true" data-gamme-id="{{ gamme.id }}">
+                  <div class="gamme-item gamme-dispo" 
+                       draggable="true" 
+                       data-gamme-id="{{ gamme.id }}"
+                       data-gamme-nom="{{ gamme.nom|lower }}">
                     <div class="d-flex justify-content-between align-items-center">
                       <div>
                         <strong>{{ gamme.ordre }}. {{ gamme.nom }}</strong><br>
@@ -56,7 +77,10 @@
               <!-- Zone de dépôt pour les gammes assignées -->
               <div id="gammes-assignees" class="gammes-list gammes-assignees">
                 {% for gamme in gammes_assignees %}
-                  <div class="gamme-item gamme-assignee" draggable="true" data-gamme-id="{{ gamme.id }}">
+                  <div class="gamme-item gamme-assignee" 
+                       draggable="true" 
+                       data-gamme-id="{{ gamme.id }}"
+                       data-gamme-nom="{{ gamme.nom|lower }}">
                     <div class="d-flex justify-content-between align-items-center">
                       <div>
                         <strong>{{ gamme.ordre }}. {{ gamme.nom }}</strong><br>
@@ -99,6 +123,17 @@
 
 <!-- ══ STYLES ══════════════════════════════════════════════════ -->
 <style>
+  /* Barre de recherche */
+  #searchGamemes {
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+  }
+
+  #searchGamemes:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+
   /* Conteneur des gammes */
   .gammes-list {
     min-height: 300px;
@@ -130,6 +165,12 @@
     border-color: #0d6efd;
   }
 
+  /* Gamme disponible */
+  .gamme-dispo {
+    background: #ffffff;
+    border-color: #e9ecef;
+  }
+
   /* Gamme assignée (vert) */
   .gamme-assignee {
     background: #f0f9ff;
@@ -146,18 +187,48 @@
     opacity: 0.5;
     background: #e9ecef;
   }
+
+  /* Gamme masquée par recherche */
+  .gamme-item.hidden {
+    display: none;
+  }
 </style>
 
-<!-- ══ JAVASCRIPT - Drag & Drop ════════════════════════════════ -->
+<!-- ══ JAVASCRIPT - Drag & Drop + Recherche ════════════════════════════════ -->
 <script>
   // Éléments du DOM
   const gammesDispo = document.getElementById('gammes-disponibles');
   const gammesAssignees = document.getElementById('gammes-assignees');
   const formAssigner = document.getElementById('form-assigner');
   const champOrdre = document.getElementById('gammes-ordre');
+  const searchInput = document.getElementById('searchGamemes');
+  const resultCount = document.getElementById('resultCount');
 
   // Variable pour stocker l'élément en cours de glissement
   let draggedElement = null;
+
+  // ══ FONCTION: Filtrer les gammes par recherche ══
+  function filterGammes() {
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const gammesDispo_items = document.querySelectorAll('#gammes-disponibles .gamme-item');
+    
+    let visibleCount = 0;
+
+    gammesDispo_items.forEach(item => {
+      const gammeName = item.dataset.gammeNom;
+      
+      if (gammeName.includes(searchTerm) || searchTerm === '') {
+        item.classList.remove('hidden');
+        item.style.display = '';
+        visibleCount++;
+      } else {
+        item.classList.add('hidden');
+        item.style.display = 'none';
+      }
+    });
+
+    resultCount.textContent = visibleCount + ' résultat(s)';
+  }
 
   // ══ FONCTION: Mettre à jour l'ordre caché ══
   function mettreAJourOrdre() {
@@ -231,6 +302,9 @@
     draggedElement = null;
   });
 
+  // ══ EVENT: Recherche en temps réel ══
+  searchInput.addEventListener('input', filterGammes);
+
   // ══ EVENT: Soumettre le formulaire ══
   formAssigner.addEventListener('submit', (e) => {
     // Mets à jour l'ordre avant de soumettre
@@ -239,6 +313,7 @@
 
   // Initialisation au chargement
   mettreAJourOrdre();
+  filterGammes();
 </script>
 
 {% endblock %}

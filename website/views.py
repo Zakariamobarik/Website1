@@ -104,6 +104,92 @@ def supprimer_gamme(request, id):
     return redirect('gammes_list')
 
 
+@login_required(login_url='home')
+def importer_gammes_excel(request):
+    """
+    Importe les gammes opératoires depuis un fichier Excel.
+    Colonnes attendues: Nom | Temps alloué (heures) | Ordre
+    """
+    if request.method == 'POST':
+        form = ImportGammesExcelForm(request.POST, request.FILES)
+        if form.is_valid():
+            fichier = request.FILES['fichier_excel']
+            
+            try:
+                # Importe openpyxl pour lire le fichier Excel
+                from openpyxl import load_workbook
+                
+                # Charge le classeur Excel
+                wb = load_workbook(fichier)
+                ws = wb.active  # Feuille active
+                
+                gammes_creees = 0
+                gammes_erreurs = []
+                
+                # Parcourt toutes les lignes (en commençant par la 2e, car la 1ère est l'en-tête)
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+                    try:
+                        # Récupère les valeurs des 3 colonnes
+                        nom = row[0]
+                        temps_alloue = row[1]
+                        ordre = row[2]
+                        
+                        # Valide que les champs ne sont pas vides
+                        if not nom or temps_alloue is None or ordre is None:
+                            gammes_erreurs.append(f"Ligne {row_idx}: données incomplètes")
+                            continue
+                        
+                        # Convertit les valeurs au bon type
+                        try:
+                            temps_alloue = float(temps_alloue)
+                            ordre = int(ordre)
+                        except ValueError:
+                            gammes_erreurs.append(
+                                f"Ligne {row_idx}: temps ou ordre invalide (doit être numérique)"
+                            )
+                            continue
+                        
+                        # Crée la gamme opératoire
+                        gamme, created = GammeOperation.objects.get_or_create(
+                            ordre=ordre,
+                            defaults={
+                                'nom': str(nom),
+                                'temps_alloue': temps_alloue,
+                            }
+                        )
+                        
+                        if created:
+                            gammes_creees += 1
+                        else:
+                            # Si la gamme existe déjà, on la met à jour
+                            gamme.nom = str(nom)
+                            gamme.temps_alloue = temps_alloue
+                            gamme.save()
+                    
+                    except Exception as e:
+                        gammes_erreurs.append(f"Ligne {row_idx}: {str(e)}")
+                
+                # Affiche les messages
+                if gammes_creees > 0:
+                    messages.success(
+                        request,
+                        f"✅ {gammes_creees} gamme(s) importée(s) avec succès!"
+                    )
+                
+                if gammes_erreurs:
+                    for erreur in gammes_erreurs:
+                        messages.warning(request, f"⚠️ {erreur}")
+                
+                return redirect('gammes_list')
+            
+            except Exception as e:
+                messages.error(request, f"❌ Erreur lors de la lecture du fichier: {str(e)}")
+                return redirect('importer_gammes_excel')
+    
+    else:
+        form = ImportGammesExcelForm()
+    
+    return render(request, 'gamme/importer_gammes_excel.html', {'form': form})
 
 
 

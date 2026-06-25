@@ -78,12 +78,24 @@ WSGI_APPLICATION = 'dcrm.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=env('DATABASE_URL', default='sqlite:///db.sqlite3'),
-        conn_max_age=600
-    )
-}
+# ✅ CONFIGURATION BASE DE DONNÉES FLEXIBLE
+USE_SQLITE = env.bool('USE_SQLITE', default=True)  # Par défaut SQLite
+
+if USE_SQLITE:
+    # 📱 DÉVELOPPEMENT LOCAL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    print("✅ Using SQLite (local development)")
+else:
+    # ☁️ PRODUCTION SUPABASE
+    DATABASES = {
+        'default': env.db('DATABASE_URL')
+    }
+    print("☁️ Using Supabase (production)")
 
 
 # Password validation

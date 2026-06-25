@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block title %}Importer des gammes - Suivi Production{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            
+            <!-- En-tête -->
+            <div class="mb-4">
+                <h1 class="display-6">
+                    <i class="fas fa-file-excel"></i> Importer des gammes opératoires
+                </h1>
+                <p class="text-muted">Chargez un fichier Excel pour créer/mettre à jour les gammes</p>
+            </div>
+
+            <!-- Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Formulaire -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">📤 Charger un fichier Excel</h5>
+                </div>
+                <div class="card-body p-5">
+                    
+                    <form method="POST" enctype="multipart/form-data" novalidate>
+                        {% csrf_token %}
+                        
+                        <!-- Champ fichier -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-folder-open"></i> Sélectionnez le fichier Excel
+                            </label>
+                            {{ form.fichier_excel }}
+                            {% if form.fichier_excel.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.fichier_excel.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Format attendu -->
+                        <div class="alert alert-info mb-4">
+                            <h6><i class="fas fa-info-circle"></i> Format du fichier Excel</h6>
+                            <p class="mb-2"><strong>3 colonnes obligatoires :</strong></p>
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Colonne A</th>
+                                        <th>Colonne B</th>
+                                        <th>Colonne C</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Nom de l'opération</strong></td>
+                                        <td><strong>Temps alloué (heures)</strong></td>
+                                        <td><strong>Ordre</strong></td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td>Assemblage</td>
+                                        <td>1.5</td>
+                                        <td>1</td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td>Soudure</td>
+                                        <td>2.0</td>
+                                        <td>2</td>
+                                    </tr>
+                                    <tr class="table-light">
+                                        <td>Peinture</td>
+                                        <td>1.25</td>
+                                        <td>3</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Boutons -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-upload"></i> Importer les gammes
+                            </button>
+                            <a href="{% url 'gammes_list' %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Annuler
+                            </a>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+
+            <!-- Aide -->
+            <div class="card border-0 shadow-sm mt-4 bg-light">
+                <div class="card-body">
+                    <h6 class="mb-3"><i class="fas fa-lightbulb"></i> Conseils</h6>
+                    <ul class="small mb-0">
+                        <li>✅ Le fichier doit être au format <strong>.xlsx</strong></li>
+                        <li>✅ Les en-têtes (1ère ligne) sont ignorés</li>
+                        <li>✅ Les gammes avec le même ordre seront mises à jour</li>
+                        <li>✅ Les temps doivent être en <strong>heures décimales</strong> (ex: 1.5 = 1h30)</li>
+                        <li>❌ Ne laissez pas de colonnes vides</li>
+                    </ul>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
