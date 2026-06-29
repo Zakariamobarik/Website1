@@ -79,8 +79,28 @@
                                        value="{{ form.poste.value|default:'' }}">
                             {% endif %}
                             <small class="text-muted">Optionnel - Département ou fonction</small>
+                                                </div>
+                        <!-- Photo de profil -->
+                        <div class="mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-image"></i> Photo de profil
+                            </label>
+                            {% if form.photo_profil.errors %}
+                                {{ form.photo_profil }}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.photo_profil.errors.0 }}
+                                </div>
+                            {% else %}
+                                {{ form.photo_profil }}
+                            {% endif %}
+                            <small class="text-muted">JPG ou PNG, max 2MB, minimum 300x300 px</small>
+                            
+                            {% if operateur.photo_profil %}
+                            <div class="mt-3">
+                                <img src="{{ operateur.photo_profil.url }}" alt="Photo" style="width: 100px; height: 100px; border-radius: 8px;">
+                            </div>
+                            {% endif %}
                         </div>
-
                         <!-- Champ Shift -->
                         <div class="mb-3">
                             <label class="form-label">

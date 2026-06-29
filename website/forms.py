@@ -79,13 +79,14 @@ class OperateurForm(forms.ModelForm):
     """Formulaire opérateur — on ajoute le champ shift"""
     class Meta:
         model  = Operateur
-        fields = ['nom', 'prenom', 'poste', 'shift', 'user']  # shift ajouté
+        fields = ['nom', 'prenom', 'poste', 'shift', 'user','photo_profil']  # shift ajouté
         widgets = {
             'nom':    forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Dupont'}),
             'prenom': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Jean'}),
             'poste':  forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Assemblage'}),
             'shift':  forms.Select(attrs={'class': 'form-control'}),   # liste déroulante auto
             'user':   forms.Select(attrs={'class': 'form-control'}),
+            'photo_profil': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/jpeg,image/png'}),
         }
         labels = {
             'nom': 'Nom',

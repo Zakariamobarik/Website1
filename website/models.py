@@ -20,7 +20,7 @@ class Operateur(models.Model):
 
     nom    = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
-    poste  = models.CharField(max_length=100, blank=True)
+    poste  = models.IntegerField(null=True, blank=True)
 
     # ── NOUVEAU champ: le shift de l'opérateur ──────────────────
     # blank=False → obligatoire, on doit toujours choisir un shift
@@ -37,6 +37,12 @@ class Operateur(models.Model):
         related_name='operateur_profil',
         verbose_name="Compte utilisateur"
     )
+    photo_profil = models.ImageField(
+    upload_to='operateurs/photos/',
+    null=True,
+    blank=True,
+    verbose_name="Photo de profil"
+)
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"

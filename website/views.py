@@ -200,8 +200,8 @@ def operateurs_list(request):
     """
     Affiche la liste de tous les opérateurs
     """
-    operateurs = Operateur.objects.all().order_by('nom')
-    
+    operateurs = Operateur.objects.all().order_by('poste')
+
     context = {
         'operateurs': operateurs,
     }
@@ -569,7 +569,7 @@ def superviseur_dashboard(request):
     Rafraîchissement automatique toutes les 30 secondes (géré en JS).
     """
     aujourd_hui  = timezone.localdate() + timedelta(hours=1)
-    operateurs   = Operateur.objects.all().order_by('shift', 'nom')
+    operateurs   = Operateur.objects.all().order_by('poste','shift', 'nom')
 
     operateurs_data = []
     for operateur in operateurs:
